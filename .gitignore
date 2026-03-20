@@ -186,7 +186,7 @@ cython_debug/
 #  that can be found at https://github.com/github/gitignore/blob/main/Global/VisualStudioCode.gitignore
 #  and can be added to the global gitignore or merged into this file. However, if you prefer, 
 #  you could uncomment the following to ignore the entire vscode folder
-# .vscode/
+#  .vscode/
 
 # Ruff stuff:
 .ruff_cache/
@@ -205,3 +205,28 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# ── Node / React / Vite ───────────────────────────────────────────────────────
+node_modules/
+dist/
+build/
+.vite/
+
+# ── Vite environment files ────────────────────────────────────────────────────
+.env.local
+.env.*.local
+
+# ── MediCheck — Vector store ──────────────────────────────────────────────────
+chroma_db/
+
+# ── MediCheck — Synthetic test documents ─────────────────────────────────────
+# PDFs are reproducible from test-data/generate_test_data.py
+# Remove these lines if you prefer to commit them for convenience
+test-data/synthetic/*.pdf
+
+# ── OS noise ──────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Editor settings ───────────────────────────────────────────────────────────
+.vscode/
