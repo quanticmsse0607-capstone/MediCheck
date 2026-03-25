@@ -1408,6 +1408,9 @@ A test coverage report shall be generated as part of the Sprint 5 test run and t
 
 ## Traceability Matrix — Functional Requirements
 
+Status values: 
+Planned — not yet started · In Progress — currently being implemented · Implemented — code complete, not yet tested · Tested — covered by automated tests and passing
+
 | Requirement ID | Description | Category | Linked User Story IDs | Status |
 |---|---|---|---|---|
 | FR-01 | PDF upload — max 10 MB and 20 pages; rejected before processing if exceeded | Document Upload | US-001 | Planned |
