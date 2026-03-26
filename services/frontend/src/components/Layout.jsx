@@ -9,8 +9,8 @@ export default function Layout() {
     <div className="min-h-screen flex flex-col">
       <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
         <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
-          <NavLink to="/" className="text-xl font-bold text-blue-900 tracking-tight">
-            MediCheck
+          <NavLink to="/">
+            <img src="/logo.png" alt="MediCheck" className="h-9 w-auto" />
           </NavLink>
           <span className="hidden md:block text-sm text-gray-500">
             AI-Powered Healthcare Bill Accuracy
