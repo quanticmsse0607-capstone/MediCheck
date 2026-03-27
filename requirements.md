@@ -1,11 +1,12 @@
 # MediCheck — Requirements & Design Document
 
 **Project:** MediCheck — AI-Powered Healthcare Bill Accuracy & Dispute Assistant  
-**Version:** 1.0  
+**Version:** 2.0  
 **Sprint:** 1  
 **Team:** Shifali Srivastava & Nadia van der Merwe  
 **Programme:** Quantic MSSE Capstone  
-**Last Updated:** March 2026
+**Last Updated:** March 2026  
+**Note:** This document supersedes system-requirements.md. All functional and non-functional requirements, user stories, user journey, and traceability matrix are consolidated here.
 
 ---
 
@@ -21,6 +22,7 @@
    - [Functional Requirements](#functional-requirements)
    - [Non-Functional Requirements](#non-functional-requirements)
 5. [Requirements Traceability Matrix](#requirements-traceability-matrix)
+6. [Future / Stretch User Stories](#future--stretch-user-stories)
 
 ---
 
@@ -1388,8 +1390,6 @@ A test coverage report shall be generated as part of the Sprint 5 test run and t
 
 ---
 
----
-
 ## 5. Requirements Traceability Matrix
 
 ## Validation Summary
@@ -1427,7 +1427,7 @@ Planned — not yet started · In Progress — currently being implemented · Im
 | FR-12 | Rate outlier — >300% of Medicare rate flagged; result includes amounts and percentage | Error Detection | US-007 | Planned |
 | FR-13 | EOB reconciliation — each field discrepancy produces a separate result | Error Detection | US-010 | Planned |
 | FR-14 | NSA violation — result identifies provider, network status, and applicable protection | Error Detection | US-011 | Planned |
-| FR-15 | Fifth check addable without modifying existing checks or pipeline logic (Strategy pattern) | Error Detection | US-018 | Planned |
+| FR-15 | Fifth check addable without modifying existing checks or pipeline logic | Error Detection | US-018 | Planned |
 | FR-16 | Every error result includes all six required fields; missing field = defect | Error Detection | US-004, US-007, US-008, US-009, US-014 | Planned |
 | FR-17 | All four CMS sources present and queryable before explanation service is ready | Knowledge Base | US-007, US-009, US-011 | Planned |
 | FR-18 | Each explanation includes at least one citation; zero citations = defect | Knowledge Base | US-004, US-009 | Planned |
@@ -1525,6 +1525,34 @@ These requirements are covered by only one user story. If that story is descoped
 | NFR-14 | Prototype cost $0/month; cost analysis documented | US-017 only |
 | NFR-21 | All fields labelled; required fields block progression | US-002 only |
 | NFR-23 | Pipeline runs on every PR and push to main | US-018 only |
+
+---
+
+## 6. Future / Stretch User Stories
+
+These stories were identified during Sprint 1 but are explicitly out of scope for the MVP. They are documented here as a backlog reference and will be noted in the design and testing document's future work section. They should be added to the Trello backlog with a "Future Work" label — not assigned to any sprint.
+
+---
+
+**US-FW-01**  
+*As a patient, I want to upload multiple provider bills at once (e.g. hospital bill, surgeon bill, and anaesthesiologist bill from the same procedure) so that MediCheck can detect duplicate charges that span across separate billing entities.*
+
+**Why deferred:** The MVP upload flow is scoped to one provider bill and one EOB per session. Supporting multiple bills would require changes to the field confirmation UI (associating line items with their source bill), an expanded data schema (multiple documents per session), and a new cross-bill detection module. The four core detection modules already provide strong coverage against the most common billing errors within a single bill and EOB pair.
+
+**Design note:** The extensible detection pipeline (FR-15) supports adding a cross-bill duplicate detection check without modifying existing checks. If implemented, it would compare procedure codes and service dates across all confirmed bills in a session, flagging same-code same-date charges from different providers for manual review rather than auto-flagging as errors, since split billing by multiple providers is sometimes legitimate.
+
+---
+
+**US-FW-02**  
+*As a returning patient, I want to create an account using my email address so that I can log back in and access my previous analysis results and dispute letters without needing to retain my session identifier.*
+
+**Why deferred:** The MVP uses an anonymous session model — users are identified solely by their session ID, with no registration or authentication required (FR-24). Adding account management (email verification, password handling, login flows, forgotten credentials) is significant scope that does not contribute to any capstone rubric criterion and would consume Sprint 2 time reserved for OCR and infrastructure. The anonymous model also has a privacy benefit: no persistent link exists between a user's identity and their uploaded medical documents.
+
+**Design note:** If implemented, account-based sessions would require an authentication layer in the bill analysis service, a user identity entity in the data store, and session ownership validation on all endpoints.
+
+---
+
+*Total future stories: 2*
 
 
 
