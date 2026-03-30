@@ -391,3 +391,135 @@ The following decisions were proposed during Sprint 1 planning. Both team member
 ---
 
 *Once all decisions are confirmed, remove the checkbox columns and update the document status to "Agreed". Commit to `/docs/api-contract.md`.*
+
+---
+
+## Part 2 — Service 2 → Service 3 API Contract
+
+**Version:** 1.0
+**Sprint:** 2
+**Status:** Draft — pending team review and sign-off before coding begins
+
+---
+
+### Overview
+
+Service 2 (Bill Analysis API) calls Service 3 (RAG & Letter Service) for two purposes:
+1. Fetching RAG-grounded explanations and citations for detected billing errors
+2. Generating dispute letter content
+
+Service 3 must respond within **10 seconds** (NFR-18). If it does not, Service 2 returns a partial response with `rag_available: false` — never a 500 error (NFR-02).
+
+| Endpoint | Method | Called From | Purpose |
+|---|---|---|---|
+| /explain | POST | Service 2 — `analyse.py` | Return RAG explanation and citations for each detected error |
+| /draft-letter | POST | Service 2 — `letter.py` | Generate dispute letter text from analysis data |
+| /health | GET | Service 2 — connectivity check | Verify Service 3 is running |
+
+---
+
+### POST /explain
+
+Service 2 sends the list of detected errors. Service 3 queries the vector store and returns a plain-English explanation with regulatory citations for each error.
+
+#### Request
+
+```json
+{
+  "session_id": "550e8400-e29b-41d4-a716-446655440000",
+  "errors": [
+    {
+      "error_id": "err_001",
+      "module": "duplicate_charge",
+      "error_type": "Duplicate Charge",
+      "description": "CPT 29881 appears twice on 2025-09-17.",
+      "line_items_affected": [1, 7],
+      "estimated_dollar_impact": 480.00,
+      "confidence": "high"
+    }
+  ]
+}
+```
+
+#### Response — HTTP 200 (success)
+
+```json
+{
+  "session_id": "550e8400-e29b-41d4-a716-446655440000",
+  "explanations": {
+    "err_001": {
+      "explanation": "Duplicate billing for the same procedure on the same date is not permitted under CMS guidelines...",
+      "citations": [
+        {
+          "source": "CMS Medicare Claims Processing Manual",
+          "section": "Chapter 23",
+          "url": "https://www.cms.gov/regulations-and-guidance/guidance/manuals/downloads/clm104c23.pdf"
+        }
+      ]
+    }
+  }
+}
+```
+
+#### Field Notes
+
+- `explanations` is keyed by `error_id` — Service 2 merges by matching on this key.
+- `citations` is an array. May be empty if no relevant source was retrieved.
+- If Service 3 times out or errors, Service 2 sets `explanation: null` and `citations: []` on all errors and returns `rag_available: false` to Service 1. Service 3 does not need to handle this case itself.
+
+---
+
+### POST /draft-letter
+
+Service 2 sends the full analysis payload. Service 3 generates the letter body text, which Service 2 then formats into Word and PDF using its own `letter_builder`.
+
+#### Request
+
+```json
+{
+  "session_id": "550e8400-e29b-41d4-a716-446655440000",
+  "analysis": {
+    "session_id": "550e8400-e29b-41d4-a716-446655440000",
+    "patient_name": "James Whitfield",
+    "provider_name": "Atrium Health Carolinas Medical Center",
+    "date_of_service": "2025-09-17",
+    "total_estimated_savings": 747.00,
+    "errors": [
+      {
+        "error_id": "err_001",
+        "error_type": "Duplicate Charge",
+        "description": "CPT 29881 appears twice on 2025-09-17.",
+        "line_items_affected": [1, 7],
+        "estimated_dollar_impact": 480.00,
+        "confidence": "high",
+        "explanation": "Duplicate billing for the same procedure...",
+        "citations": []
+      }
+    ]
+  }
+}
+```
+
+#### Response — HTTP 200 (success)
+
+```json
+{
+  "session_id": "550e8400-e29b-41d4-a716-446655440000",
+  "letter_content": "Dear Billing Department,\n\nI am writing to formally dispute..."
+}
+```
+
+#### Field Notes
+
+- `letter_content` is a plain-text string. Service 2's `letter_builder` is responsible for formatting it into Word and PDF — Service 3 returns text only.
+- If Service 3 times out, Service 2 falls back to a template-generated letter. `letter_content` will be `null` in the RAG client return value.
+
+---
+
+### Decisions Log — Service 2 → Service 3
+
+| Decision | Recommendation | Confirmed by Member 1 | Confirmed by Member 2 |
+|---|---|---|---|
+| `explanations` response — keyed by `error_id` or array? | Keyed by `error_id` — simpler merge in Service 2 | ☐ | ☐ |
+| `letter_content` format — plain text or HTML? | Plain text — Service 2 handles formatting | ☐ | ☐ |
+| Timeout handling — Service 3 responsibility or Service 2? | Service 2 handles timeout gracefully — Service 3 has no special handling | ☐ | ☐ |
