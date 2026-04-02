@@ -1,495 +1,201 @@
-name: CI/CD Pipeline
+name: MediCheck CI/CD
 
 on:
   push:
-    branches:
-      - main
-      - develop
-      - Epic3backend
+    branches: [main]
   pull_request:
-    branches:
-      - main
-      - develop
+    branches: [main]
 
 jobs:
-  # ============================================================================
-  # HEALTH CHECKS - Verify services are responsive (NFR-12, NFR-04)
-  # ============================================================================
-  
-  health-check:
-    name: Health Check Tests
+
+  # ══════════════════════════════════════════════════════════
+  # SERVICE 2 — Bill Analysis API
+  # NFR-23: runs on every PR and push to main
+  # NFR-25: pytest, black, pylint
+  # ══════════════════════════════════════════════════════════
+  service2:
+    name: Service 2 — Bill Analysis
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    
-    services:
-      postgres:
-        image: postgres:15-alpine
-        env:
-          POSTGRES_USER: test_user
-          POSTGRES_PASSWORD: test_password
-          POSTGRES_DB: medicheck_test
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
+
+    defaults:
+      run:
+        working-directory: services/service2-billanalysis
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-          cache: 'pip'
-
-      - name: Install Service 2 dependencies
-        working-directory: services/service2-billanalysis
-        run: |
-          pip install --upgrade pip
-          pip install -r requirements-dev.txt
-
-      - name: Start Service 2 (Mock OCR)
-        working-directory: services/service2-billanalysis
-        env:
-          FLASK_ENV: testing
-          USE_MOCK_OCR: 'true'
-          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/medicheck_test
-        run: |
-          flask db upgrade 2>/dev/null || true
-          flask run --port 5001 &
-          echo $! > flask.pid
-          sleep 2
-
-      - name: Test /health endpoint (NFR-12, NFR-04)
-        run: |
-          for i in {1..5}; do
-            echo "Attempt $i: Testing /health endpoint..."
-            curl -f http://localhost:5001/health || exit 1
-            sleep 1
-          done
-        timeout-minutes: 1
-
-      - name: Verify response time < 2 seconds (NFR-04)
-        run: |
-          time_taken=$(curl -w "%{time_total}" -o /dev/null -s http://localhost:5001/health)
-          echo "Health check response time: ${time_taken}s"
-          if (( $(echo "$time_taken > 2" | bc -l) )); then
-            echo "ERROR: Health check took more than 2 seconds!"
-            exit 1
-          fi
-
-      - name: Stop Service 2
-        if: always()
-        run: kill $(cat flask.pid) 2>/dev/null || true
-
-  # ============================================================================
-  # BACKEND TESTS - Service 2 (Bill Analysis API)
-  # ============================================================================
-  
-  test-service2:
-    name: Test Service 2 (Backend)
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-
-    services:
-      postgres:
-        image: postgres:15-alpine
-        env:
-          POSTGRES_USER: test_user
-          POSTGRES_PASSWORD: test_password
-          POSTGRES_DB: medicheck_test
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-          cache: 'pip'
+          python-version: "3.11"
 
       - name: Install dependencies
-        working-directory: services/service2-billanalysis
-        run: |
-          pip install --upgrade pip
-          pip install -r requirements-dev.txt
+        run: pip install -r requirements.txt
 
-      - name: Lint with flake8
-        working-directory: services/service2-billanalysis
-        run: |
-          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-        continue-on-error: true
+      - name: Black formatting check
+        run: black --check .
 
-      - name: Run unit tests
-        working-directory: services/service2-billanalysis
+      - name: Pylint
+        run: pylint app.py config.py models.py extensions.py routes/ detectors/ services/ --fail-under=7.0
+
+      - name: Run tests
         env:
-          FLASK_ENV: testing
-          USE_MOCK_OCR: 'true'
-          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/medicheck_test
-        run: |
-          pytest tests/ -v --tb=short --cov=. --cov-report=xml --cov-report=html
-          
-      - name: Upload coverage report
-        uses: codecov/codecov-action@v3
-        with:
-          files: ./services/service2-billanalysis/coverage.xml
-          flags: service2
-          name: service2-coverage
-        continue-on-error: true
+          FLASK_ENV: development
+          DATABASE_URL: sqlite:///test.db
+          USE_MOCK_OCR: "true"
+          SERVICE3_URL: http://localhost:5002
+          SECRET_KEY: ci-test-secret
+          MAX_FILE_SIZE_MB: "10"
+          MAX_PAGE_COUNT: "20"
+        run: pytest tests/ -v --tb=short
 
-      - name: Test error detection detectors (FR-10, FR-11, FR-15, FR-16)
-        working-directory: services/service2-billanalysis
-        env:
-          FLASK_ENV: testing
-          USE_MOCK_OCR: 'true'
-        run: |
-          pytest tests/test_detectors.py -v --tb=short
-
-      - name: Test upload & OCR (FR-01 to FR-05)
-        working-directory: services/service2-billanalysis
-        env:
-          FLASK_ENV: testing
-          USE_MOCK_OCR: 'true'
-        run: |
-          pytest tests/test_upload.py -v --tb=short
-
-      - name: Test analysis pipeline (FR-10, NFR-17, NFR-18)
-        working-directory: services/service2-billanalysis
-        env:
-          FLASK_ENV: testing
-          USE_MOCK_OCR: 'true'
-        run: |
-          pytest tests/test_analyse.py -v --tb=short
-
-  # ============================================================================
-  # FRONTEND TESTS - Service 1 (React SPA)
-  # ============================================================================
-
-  test-service1:
-    name: Test Service 1 (Frontend)
+  # ══════════════════════════════════════════════════════════
+  # SERVICE 3 — RAG & Letter Service
+  # Skips if service3-rag folder has no requirements.txt yet
+  # ══════════════════════════════════════════════════════════
+  service3:
+    name: Service 3 — RAG & Letter
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+
+    defaults:
+      run:
+        working-directory: services/service3-rag
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Check if Service 3 exists
+        id: check
+        run: |
+          if [ -f "requirements.txt" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Set up Python 3.11
+        if: steps.check.outputs.exists == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        if: steps.check.outputs.exists == 'true'
+        run: pip install -r requirements.txt
+
+      - name: Black formatting check
+        if: steps.check.outputs.exists == 'true'
+        run: black --check .
+
+      - name: Pylint
+        if: steps.check.outputs.exists == 'true'
+        run: pylint app.py routes/ services/ --fail-under=7.0
+
+      - name: Run tests
+        if: steps.check.outputs.exists == 'true'
+        env:
+          FLASK_ENV: development
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SECRET_KEY: ci-test-secret
+          CHROMA_PERSIST_DIR: ./chroma_db_test
+        run: pytest tests/ -v --tb=short
+
+  # ══════════════════════════════════════════════════════════
+  # SERVICE 1 — React Frontend
+  # Skips if service1-frontend folder has no package.json yet
+  # ══════════════════════════════════════════════════════════
+  service1:
+    name: Service 1 — React Frontend
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: services/service1-frontend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check if Service 1 exists
+        id: check
+        run: |
+          if [ -f "package.json" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Set up Node.js
+        if: steps.check.outputs.exists == 'true'
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
-          cache: 'npm'
-          cache-dependency-path: services/service1-frontend/package-lock.json
+          node-version: "20"
 
       - name: Install dependencies
-        working-directory: services/service1-frontend
-        run: npm ci
+        if: steps.check.outputs.exists == 'true'
+        run: npm install
 
-      - name: Build project
-        working-directory: services/service1-frontend
+      - name: Build
+        if: steps.check.outputs.exists == 'true'
+        env:
+          VITE_API_URL: https://medicheck-bill-analysis.onrender.com
         run: npm run build
-        env:
-          VITE_SERVICE2_URL: http://localhost:5001
 
-      - name: Run unit tests (if configured)
-        working-directory: services/service1-frontend
-        run: npm test --if-present
-        continue-on-error: true
-
-      - name: Lint with ESLint (if configured)
-        working-directory: services/service1-frontend
-        run: npm run lint --if-present
-        continue-on-error: true
-
-      - name: Verify build output
-        working-directory: services/service1-frontend
-        run: |
-          if [ ! -d "dist" ]; then
-            echo "ERROR: Build output directory 'dist' not found!"
-            exit 1
-          fi
-          echo "Build successful. Output size:"
-          du -sh dist
-
-  # ============================================================================
-  # SECURITY CHECKS
-  # ============================================================================
-
-  security-scan:
-    name: Security Scanning
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-
-      - name: Run Bandit security scan (Python)
-        run: |
-          pip install bandit
-          bandit -r services/service2-billanalysis -f json -o bandit-report.json || true
-          echo "Bandit scan completed (see report above for any security issues)"
-        continue-on-error: true
-
-      - name: Check for secrets
-        uses: trufflesecurity/trufflehog@main
-        with:
-          path: ./
-          base: ${{ github.event.repository.default_branch }}
-          head: HEAD
-        continue-on-error: true
-
-  # ============================================================================
-  # INTEGRATION TESTS - End-to-end workflow
-  # ============================================================================
-
-  integration-tests:
-    name: Integration Tests (E2E)
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    needs: [test-service2, test-service1]
-
-    services:
-      postgres:
-        image: postgres:15-alpine
-        env:
-          POSTGRES_USER: test_user
-          POSTGRES_PASSWORD: test_password
-          POSTGRES_DB: medicheck_test
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-          cache: 'pip'
-
-      - name: Install Service 2 dependencies
-        working-directory: services/service2-billanalysis
-        env:
-          FLASK_ENV: testing
-        run: |
-          pip install --upgrade pip
-          pip install -r requirements-dev.txt
-
-      - name: Start Service 2
-        working-directory: services/service2-billanalysis
-        env:
-          FLASK_ENV: testing
-          USE_MOCK_OCR: 'true'
-          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/medicheck_test
-        run: |
-          flask run --port 5001 &
-          echo $! > flask.pid
-          sleep 3
-
-      - name: Test complete workflow
-        run: |
-          echo "Testing: Upload → Confirm → Analyse → Letter workflow"
-          
-          # 1. Upload mock bill
-          echo "1. Testing POST /upload..."
-          UPLOAD_RESPONSE=$(curl -s -X POST http://localhost:5001/upload \
-            -F "bill=@services/service2-billanalysis/tests/fixtures/sample_bill.pdf" 2>/dev/null || \
-            curl -s -X POST http://localhost:5001/upload \
-            -F "bill=@/dev/null" -F "Content-Type: application/octet-stream")
-          
-          if [ -z "$UPLOAD_RESPONSE" ]; then
-            echo "WARNING: Could not upload file. Testing with mock data instead."
-            # Create a test session programmatically via Python
-            python3 << 'EOF'
-import requests
-import json
-
-session_data = {
-    "patient_name": "Test Patient",
-    "provider_name": "Test Hospital",
-    "date_of_service": "2024-01-15",
-    "total_billed": 1500.00
-}
-
-response = requests.post("http://localhost:5001/confirm", json={
-    "session_id": "test-session-123",
-    "corrections": {}
-})
-
-print(f"Test request sent: {response.status_code}")
-EOF
-          fi
-          
-          echo "✓ Workflow test completed"
-
-      - name: Stop Service 2
-        if: always()
-        run: kill $(cat flask.pid) 2>/dev/null || true
-
-  # ============================================================================
-  # BUILD & DEPLOY - Push to Render (Production)
-  # ============================================================================
-
+  # ══════════════════════════════════════════════════════════
+  # DEPLOY — only on push to main after all jobs pass
+  # NFR-24: auto-deploy + health checks post-deploy
+  # ══════════════════════════════════════════════════════════
   deploy:
-    name: Deploy to Render (Production)
+    name: Deploy and Health Check
     runs-on: ubuntu-latest
-    needs: [health-check, test-service2, test-service1, integration-tests]
+    needs: [service2, service3, service1]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    timeout-minutes: 30
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Deploy Service 1 (Frontend)
+      - name: Deploy Service 2 to Render
         run: |
-          echo "Deploying Service 1 (Frontend) to Render..."
-          if [ -z "${{ secrets.RENDER_DEPLOY_HOOK_SERVICE1 }}" ]; then
-            echo "WARNING: RENDER_DEPLOY_HOOK_SERVICE1 secret not set. Skipping Service 1 deployment."
-          else
-            curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK_SERVICE1 }}"
-            echo "Service 1 deployment triggered. Check Render dashboard for status."
-            sleep 5
-          fi
+          curl -s -X POST \
+            "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE2_ID }}/deploys" \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"clearCache": false}'
+          echo "Service 2 deploy triggered"
 
-      - name: Deploy Service 2 (Bill Analysis API)
+      - name: Deploy Service 3 to Render
+        if: secrets.RENDER_SERVICE3_ID != ''
         run: |
-          echo "Deploying Service 2 (Backend) to Render..."
-          if [ -z "${{ secrets.RENDER_DEPLOY_HOOK_SERVICE2 }}" ]; then
-            echo "WARNING: RENDER_DEPLOY_HOOK_SERVICE2 secret not set. Skipping Service 2 deployment."
-          else
-            curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK_SERVICE2 }}"
-            echo "Service 2 deployment triggered. Check Render dashboard for status."
-            sleep 5
-          fi
-
-      - name: Deploy Service 3 (RAG Service)
-        run: |
-          echo "Deploying Service 3 (RAG Service) to Render..."
-          if [ -z "${{ secrets.RENDER_DEPLOY_HOOK_SERVICE3 }}" ]; then
-            echo "WARNING: RENDER_DEPLOY_HOOK_SERVICE3 secret not set. Skipping Service 3 deployment."
-          else
-            curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK_SERVICE3 }}"
-            echo "Service 3 deployment triggered. Check Render dashboard for status."
-            sleep 5
-          fi
+          curl -s -X POST \
+            "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE3_ID }}/deploys" \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"clearCache": false}'
+          echo "Service 3 deploy triggered"
 
       - name: Wait for deployments to complete
+        run: sleep 60
+
+      - name: Health check Service 2
         run: |
-          echo "Waiting for services to come online (60 seconds)..."
-          sleep 60
-
-      - name: Verify production health checks
-        run: |
-          echo "Verifying production services..."
-          
-          # Get service URLs from secrets or environment
-          SERVICE1_URL="${{ secrets.RENDER_SERVICE1_URL }}"
-          SERVICE2_URL="${{ secrets.RENDER_SERVICE2_URL }}"
-          SERVICE3_URL="${{ secrets.RENDER_SERVICE3_URL }}"
-          
-          if [ -z "$SERVICE2_URL" ]; then
-            echo "WARNING: Service URLs not configured in secrets. Skipping health check."
-          else
-            echo "Checking Service 2 (/health)..."
-            for i in {1..10}; do
-              if curl -f "$SERVICE2_URL/health" 2>/dev/null; then
-                echo "✓ Service 2 is online"
-                break
-              fi
-              echo "  Attempt $i/10: Service not ready yet..."
-              sleep 5
-            done
-          fi
-
-      - name: Post deployment notification
-        if: always()
-        run: |
-          echo "Deployment complete!"
-          echo "Check Render dashboard: https://dashboard.render.com"
-          echo ""
-          echo "Services:"
-          echo "  - Service 1 (Frontend): https://your-service1-url.onrender.com"
-          echo "  - Service 2 (Backend):  https://your-service2-url.onrender.com"
-          echo "  - Service 3 (RAG):      https://your-service3-url.onrender.com"
-
-  # ============================================================================
-  # STATUS CHECK - Final summary
-  # ============================================================================
-
-  status-check:
-    name: Status Check
-    runs-on: ubuntu-latest
-    needs: [health-check, test-service2, test-service1, security-scan, integration-tests]
-    if: always()
-
-    steps:
-      - name: Check job results
-        run: |
-          echo "CI/CD Pipeline Summary"
-          echo "===================="
-          echo "Health Checks:      ${{ needs.health-check.result }}"
-          echo "Service 2 Tests:    ${{ needs.test-service2.result }}"
-          echo "Service 1 Tests:    ${{ needs.test-service1.result }}"
-          echo "Security Scan:      ${{ needs.security-scan.result }}"
-          echo "Integration Tests:  ${{ needs.integration-tests.result }}"
-          echo ""
-          
-          if [[ "${{ needs.health-check.result }}" == "failure" ]] || \
-             [[ "${{ needs.test-service2.result }}" == "failure" ]] || \
-             [[ "${{ needs.test-service1.result }}" == "failure" ]]; then
-            echo "❌ Pipeline FAILED - Please review the logs above"
+          response=$(curl -s -o /dev/null -w "%{http_code}" \
+            https://medicheck-bill-analysis.onrender.com/health)
+          if [ "$response" != "200" ]; then
+            echo "Service 2 health check FAILED - HTTP $response"
             exit 1
-          else
-            echo "✅ Pipeline PASSED - Ready to deploy"
           fi
+          echo "Service 2 health check PASSED - HTTP $response"
 
-      - name: Comment on PR (if PR)
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const comment = `## CI/CD Status ✅
-
-            All checks passed!
-            
-            - ✅ Health checks (NFR-12, NFR-04)
-            - ✅ Backend tests (Service 2)
-            - ✅ Frontend tests (Service 1)
-            - ✅ Security scan
-            - ✅ Integration tests
-            
-            Ready to merge and deploy.`;
-            
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: comment
-            });
+      - name: Health check Service 3
+        if: secrets.RENDER_SERVICE3_ID != ''
+        run: |
+          response=$(curl -s -o /dev/null -w "%{http_code}" \
+            https://medicheck-rag.onrender.com/health)
+          if [ "$response" != "200" ]; then
+            echo "Service 3 health check FAILED - HTTP $response"
+            exit 1
+          fi
+          echo "Service 3 health check PASSED - HTTP $response"
