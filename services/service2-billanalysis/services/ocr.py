@@ -54,10 +54,16 @@ class OCRService:
 
         # Map known field names from key-value pairs
         patient_name = self._find_field(kv_pairs, ["patient name", "patient", "name"])
-        provider_name = self._find_field(kv_pairs, ["provider", "facility", "hospital", "provider name"])
-        date_of_service = self._find_field(kv_pairs, ["date of service", "dos", "service date"])
+        provider_name = self._find_field(
+            kv_pairs, ["provider", "facility", "hospital", "provider name"]
+        )
+        date_of_service = self._find_field(
+            kv_pairs, ["date of service", "dos", "service date"]
+        )
         total_billed = self._parse_amount(
-            self._find_field(kv_pairs, ["total", "amount due", "total billed", "total charges"])
+            self._find_field(
+                kv_pairs, ["total", "amount due", "total billed", "total charges"]
+            )
         )
 
         return {
@@ -79,17 +85,21 @@ class OCRService:
 
         kv_pairs = []
         for block in blocks:
-            if block["BlockType"] == "KEY_VALUE_SET" and "KEY" in block.get("EntityTypes", []):
+            if block["BlockType"] == "KEY_VALUE_SET" and "KEY" in block.get(
+                "EntityTypes", []
+            ):
                 key_text = self._get_text_from_block(block, block_map)
                 value_block = self._get_value_block(block, block_map)
                 if value_block:
                     value_text = self._get_text_from_block(value_block, block_map)
                     confidence = block.get("Confidence", 0) / 100.0
-                    kv_pairs.append({
-                        "key": key_text.strip().lower(),
-                        "value": value_text.strip(),
-                        "confidence": round(confidence, 3),
-                    })
+                    kv_pairs.append(
+                        {
+                            "key": key_text.strip().lower(),
+                            "value": value_text.strip(),
+                            "confidence": round(confidence, 3),
+                        }
+                    )
 
         return kv_pairs
 
@@ -133,21 +143,25 @@ class OCRService:
 
                 if cpt_code:
                     confidence = self._estimate_row_confidence(row)
-                    line_items.append({
-                        "line_number": line_number,
-                        "cpt_code": cpt_code,
-                        "description": "",      # never populated — AMA copyright
-                        "quantity": 1,
-                        "amount": amount or 0.0,
-                        "date": date,
-                        "confidence": confidence,
-                        "source": source,
-                    })
+                    line_items.append(
+                        {
+                            "line_number": line_number,
+                            "cpt_code": cpt_code,
+                            "description": "",  # never populated — AMA copyright
+                            "quantity": 1,
+                            "amount": amount or 0.0,
+                            "date": date,
+                            "confidence": confidence,
+                            "source": source,
+                        }
+                    )
                     line_number += 1
 
         return line_items
 
-    def _extract_table_rows(self, table_block: dict, block_map: dict) -> list[list[str]]:
+    def _extract_table_rows(
+        self, table_block: dict, block_map: dict
+    ) -> list[list[str]]:
         rows = {}
         for rel in table_block.get("Relationships", []):
             if rel["Type"] == "CHILD":

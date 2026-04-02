@@ -22,8 +22,12 @@ EMERGENCY_CPT_RANGES = [
 # Keywords in provider name that suggest out-of-network ancillary providers
 # (anaesthesiologists, radiologists, pathologists — common NSA violation contexts)
 ANCILLARY_KEYWORDS = [
-    "anesthesia", "anaesthesia", "radiology", "pathology",
-    "emergency medicine", "hospitalist",
+    "anesthesia",
+    "anaesthesia",
+    "radiology",
+    "pathology",
+    "emergency medicine",
+    "hospitalist",
 ]
 
 
@@ -63,9 +67,7 @@ class NoSurprisesActDetector(BaseDetector):
 
         # Build EOB lookup: cpt_code → eob item
         eob_by_cpt = {
-            (i.get("cpt_code") or "").strip(): i
-            for i in eob_items
-            if i.get("cpt_code")
+            (i.get("cpt_code") or "").strip(): i for i in eob_items if i.get("cpt_code")
         }
 
         bill_items = [i for i in all_items if i.get("source") == "bill"]
@@ -82,7 +84,12 @@ class NoSurprisesActDetector(BaseDetector):
 
             # Check if provider is flagged as out-of-network in EOB
             network_status = (eob_item.get("network_status") or "").lower()
-            is_out_of_network = network_status in ("out-of-network", "out_of_network", "oon", "non-participating")
+            is_out_of_network = network_status in (
+                "out-of-network",
+                "out_of_network",
+                "oon",
+                "non-participating",
+            )
 
             if not is_out_of_network:
                 continue
@@ -95,21 +102,27 @@ class NoSurprisesActDetector(BaseDetector):
                 # NSA does not apply — elective out-of-network outpatient (US-011 AC5)
                 continue
 
-            context = "emergency care" if is_emergency else "services by an out-of-network ancillary provider at an in-network facility"
+            context = (
+                "emergency care"
+                if is_emergency
+                else "services by an out-of-network ancillary provider at an in-network facility"
+            )
 
-            results.append(DetectionResult(
-                module=self.module_name,
-                error_type="No Surprises Act Violation",
-                description=(
-                    f"CPT {cpt} (line item {bill_item['line_number']}) may be a balance billing "
-                    f"charge prohibited under the No Surprises Act. The provider is recorded as "
-                    f"out-of-network in your EOB, and this charge relates to {context}. "
-                    f"Under the No Surprises Act (Pub. L. 116-260), patients are protected from "
-                    f"balance billing in this context."
-                ),
-                line_items_affected=[bill_item["line_number"]],
-                estimated_dollar_impact=float(bill_item.get("amount", 0)),
-                confidence="medium",
-            ))
+            results.append(
+                DetectionResult(
+                    module=self.module_name,
+                    error_type="No Surprises Act Violation",
+                    description=(
+                        f"CPT {cpt} (line item {bill_item['line_number']}) may be a balance billing "
+                        f"charge prohibited under the No Surprises Act. The provider is recorded as "
+                        f"out-of-network in your EOB, and this charge relates to {context}. "
+                        f"Under the No Surprises Act (Pub. L. 116-260), patients are protected from "
+                        f"balance billing in this context."
+                    ),
+                    line_items_affected=[bill_item["line_number"]],
+                    estimated_dollar_impact=float(bill_item.get("amount", 0)),
+                    confidence="medium",
+                )
+            )
 
         return results

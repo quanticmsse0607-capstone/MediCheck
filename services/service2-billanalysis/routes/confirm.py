@@ -11,7 +11,7 @@ from models import Session, ExtractedField, LineItem, SessionStatus
 confirm_bp = Blueprint("confirm", __name__)
 
 ERR_SESSION_NOT_FOUND = "SESSION_NOT_FOUND"
-ERR_NOT_CONFIRMED     = "NOT_CONFIRMED"
+ERR_NOT_CONFIRMED = "NOT_CONFIRMED"
 
 
 @confirm_bp.post("/confirm")
@@ -34,21 +34,27 @@ def confirm():
     data = request.get_json(silent=True) or {}
 
     session_id = data.get("session_id")
-    confirmed  = data.get("confirmed_fields", {})
+    confirmed = data.get("confirmed_fields", {})
 
     # ── 1. Validate session exists ────────────────────────────────────────────
     session = Session.query.get(session_id)
     if not session:
-        return _error(404, ERR_SESSION_NOT_FOUND,
-                      "No session found for the provided session_id.",
-                      session_id)
+        return _error(
+            404,
+            ERR_SESSION_NOT_FOUND,
+            "No session found for the provided session_id.",
+            session_id,
+        )
 
     # ── 2. Validate session state (FR-26) ─────────────────────────────────────
     if not SessionStatus.can_transition_to(session.status, SessionStatus.CONFIRMED):
-        return _error(400, ERR_NOT_CONFIRMED,
-                      f"Session status is '{session.status}'. "
-                      "Field confirmation requires status 'extracted'.",
-                      session_id)
+        return _error(
+            400,
+            ERR_NOT_CONFIRMED,
+            f"Session status is '{session.status}'. "
+            "Field confirmation requires status 'extracted'.",
+            session_id,
+        )
 
     # ── 3. Update top-level confirmed fields ──────────────────────────────────
     extracted = ExtractedField.query.filter_by(session_id=session_id).first()
@@ -68,7 +74,7 @@ def confirm():
     confirmed_items = confirmed.get("line_items", [])
     for confirmed_item in confirmed_items:
         line_number = confirmed_item.get("line_number")
-        source      = confirmed_item.get("source", "bill")
+        source = confirmed_item.get("source", "bill")
 
         line_item = LineItem.query.filter_by(
             extracted_field_id=extracted.id if extracted else None,
@@ -89,17 +95,28 @@ def confirm():
     session.status = SessionStatus.CONFIRMED
     db.session.commit()
 
-    return jsonify({
-        "session_id": session_id,
-        "status": "confirmed",
-    }), 200
+    return (
+        jsonify(
+            {
+                "session_id": session_id,
+                "status": "confirmed",
+            }
+        ),
+        200,
+    )
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _error(status: int, code: str, message: str, session_id=None):
-    return jsonify({
-        "error_code": code,
-        "message": message,
-        "session_id": session_id,
-    }), status
+    return (
+        jsonify(
+            {
+                "error_code": code,
+                "message": message,
+                "session_id": session_id,
+            }
+        ),
+        status,
+    )

@@ -8,20 +8,23 @@ import os
 from flask import Blueprint, request, jsonify, current_app
 from extensions import db
 from models import Session, ExtractedField, LineItem, SessionStatus
+
 if os.environ.get("USE_MOCK_OCR", "false").lower() == "true":
     from services.mock_ocr import MockOCRService
+
     ocr_service = MockOCRService()
 else:
     from services.ocr import OCRService
+
     ocr_service = OCRService()
 
 upload_bp = Blueprint("upload", __name__)
 
 # ── Error codes (from API contract error code reference) ──────────────────────
 ERR_INVALID_FILE_TYPE = "INVALID_FILE_TYPE"
-ERR_FILE_TOO_LARGE    = "FILE_TOO_LARGE"
-ERR_PAGE_LIMIT        = "PAGE_LIMIT_EXCEEDED"
-ERR_NO_BILL           = "NO_BILL_UPLOADED"
+ERR_FILE_TOO_LARGE = "FILE_TOO_LARGE"
+ERR_PAGE_LIMIT = "PAGE_LIMIT_EXCEEDED"
+ERR_NO_BILL = "NO_BILL_UPLOADED"
 
 
 @upload_bp.post("/upload")
@@ -40,10 +43,12 @@ def upload():
 
     # ── 1. Validate bill file is present ──────────────────────────────────────
     if "bill" not in request.files:
-        return _error(400, ERR_NO_BILL, "No bill file uploaded. Field name must be 'bill'.")
+        return _error(
+            400, ERR_NO_BILL, "No bill file uploaded. Field name must be 'bill'."
+        )
 
     bill_file = request.files["bill"]
-    eob_file  = request.files.get("eob")
+    eob_file = request.files.get("eob")
 
     # ── 2. Validate bill file ──────────────────────────────────────────────────
     validation_error = _validate_pdf(bill_file, current_app.config)
@@ -58,13 +63,13 @@ def upload():
 
     # ── 4. Run OCR on bill ────────────────────────────────────────────────────
     bill_bytes = bill_file.read()
-    bill_data  = ocr_service.extract(bill_bytes, source="bill")
+    bill_data = ocr_service.extract(bill_bytes, source="bill")
 
     # ── 5. Run OCR on EOB if present ──────────────────────────────────────────
     eob_data = None
     if eob_file:
         eob_bytes = eob_file.read()
-        eob_data  = ocr_service.extract(eob_bytes, source="eob")
+        eob_data = ocr_service.extract(eob_bytes, source="eob")
 
     # ── 6. Persist session ────────────────────────────────────────────────────
     session = Session(status=SessionStatus.EXTRACTED)
@@ -101,21 +106,27 @@ def upload():
         for item in eob_data.get("line_items", []):
             all_line_items.append(_format_line_item(item, "eob"))
 
-    return jsonify({
-        "session_id": session.session_id,
-        "status": "extracted",
-        "extracted_fields": {
-            "patient_name": bill_data.get("patient_name"),
-            "provider_name": bill_data.get("provider_name"),
-            "date_of_service": bill_data.get("date_of_service"),
-            "total_billed": bill_data.get("total_billed"),
-            "line_items": all_line_items,
-        },
-        "rag_available": True,  # checked at analyse time, assume available on upload
-    }), 200
+    return (
+        jsonify(
+            {
+                "session_id": session.session_id,
+                "status": "extracted",
+                "extracted_fields": {
+                    "patient_name": bill_data.get("patient_name"),
+                    "provider_name": bill_data.get("provider_name"),
+                    "date_of_service": bill_data.get("date_of_service"),
+                    "total_billed": bill_data.get("total_billed"),
+                    "line_items": all_line_items,
+                },
+                "rag_available": True,  # checked at analyse time, assume available on upload
+            }
+        ),
+        200,
+    )
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _validate_pdf(file, config) -> tuple | None:
     """
@@ -131,13 +142,14 @@ def _validate_pdf(file, config) -> tuple | None:
     # Size check (read into memory to get size, then reset)
     file.seek(0, 2)  # seek to end
     size_bytes = file.tell()
-    file.seek(0)     # reset
+    file.seek(0)  # reset
 
     max_bytes = config["MAX_FILE_SIZE_MB"] * 1024 * 1024
     if size_bytes > max_bytes:
         return _error(
-            400, ERR_FILE_TOO_LARGE,
-            f"File exceeds the {config['MAX_FILE_SIZE_MB']} MB limit."
+            400,
+            ERR_FILE_TOO_LARGE,
+            f"File exceeds the {config['MAX_FILE_SIZE_MB']} MB limit.",
         )
 
     return None
@@ -148,7 +160,7 @@ def _build_line_item(extracted_field_id: int, item: dict, source: str) -> LineIt
         extracted_field_id=extracted_field_id,
         line_number=item["line_number"],
         cpt_code=item.get("cpt_code"),
-        description="",   # never populated — AMA copyright
+        description="",  # never populated — AMA copyright
         quantity=item.get("quantity", 1),
         extracted_amount=item.get("amount"),
         extracted_date=item.get("date"),
@@ -162,7 +174,7 @@ def _format_line_item(item: dict, source: str) -> dict:
     return {
         "line_number": item["line_number"],
         "cpt_code": item.get("cpt_code"),
-        "description": "",   # AMA copyright — always empty
+        "description": "",  # AMA copyright — always empty
         "quantity": item.get("quantity", 1),
         "amount": item.get("amount", 0.0),
         "confidence": item.get("confidence"),
@@ -171,8 +183,13 @@ def _format_line_item(item: dict, source: str) -> dict:
 
 
 def _error(status: int, code: str, message: str):
-    return jsonify({
-        "error_code": code,
-        "message": message,
-        "session_id": None,
-    }), status
+    return (
+        jsonify(
+            {
+                "error_code": code,
+                "message": message,
+                "session_id": None,
+            }
+        ),
+        status,
+    )

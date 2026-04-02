@@ -27,11 +27,11 @@ def create_app(config_name: str = None) -> Flask:
     db.init_app(app)
 
     # ── Register blueprints ───────────────────────────────────────────────────
-    from routes.health  import health_bp
-    from routes.upload  import upload_bp
+    from routes.health import health_bp
+    from routes.upload import upload_bp
     from routes.confirm import confirm_bp
     from routes.analyse import analyse_bp
-    from routes.letter  import letter_bp
+    from routes.letter import letter_bp
 
     app.register_blueprint(health_bp)
     app.register_blueprint(upload_bp)

@@ -8,7 +8,9 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
     # Database
-    SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL", "sqlite:///medicheck_dev.db")
+    SQLALCHEMY_DATABASE_URI = os.environ.get(
+        "DATABASE_URL", "sqlite:///medicheck_dev.db"
+    )
 
     # AWS Textract
     AWS_ACCESS_KEY_ID = os.environ.get("AWS_ACCESS_KEY_ID")

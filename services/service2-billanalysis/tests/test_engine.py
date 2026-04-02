@@ -17,7 +17,15 @@ def _fields(*items, date_of_service="2025-09-17"):
     }
 
 
-def _item(line_number, cpt, amount, source="bill", date="2025-09-17", quantity=1, network_status=None):
+def _item(
+    line_number,
+    cpt,
+    amount,
+    source="bill",
+    date="2025-09-17",
+    quantity=1,
+    network_status=None,
+):
     i = {
         "line_number": line_number,
         "cpt_code": cpt,
@@ -62,8 +70,8 @@ class TestErrorDetectionEngine:
         """Demo Scenario A — duplicate + rate outlier both fire."""
         fields = _fields(
             _item(1, "29881", 3200.00),
-            _item(2, "29881", 3200.00),   # duplicate
-            _item(3, "99215", 500.00),    # rate outlier (>300% of $82)
+            _item(2, "29881", 3200.00),  # duplicate
+            _item(3, "99215", 500.00),  # rate outlier (>300% of $82)
         )
         output = engine.run(fields)
         modules = {r.module for r in output["results"]}
@@ -73,8 +81,9 @@ class TestErrorDetectionEngine:
     def test_engine_does_not_crash_if_one_detector_raises(self, engine, mocker):
         """FR-10: one detector failure must not stop the others."""
         mocker.patch.object(
-            engine._detectors[0], "run",
-            side_effect=Exception("Simulated detector crash")
+            engine._detectors[0],
+            "run",
+            side_effect=Exception("Simulated detector crash"),
         )
         fields = _fields(_item(1, "99215", 500.00))
         output = engine.run(fields)
@@ -84,8 +93,9 @@ class TestErrorDetectionEngine:
     def test_result_defects_logged_not_raised(self, engine, mocker):
         """FR-16: defective results are logged, not raised."""
         from detectors.base import DetectionResult
+
         bad_result = DetectionResult(
-            module="",          # missing — defect
+            module="",  # missing — defect
             error_type="Test",
             description="Test",
             line_items_affected=[1],

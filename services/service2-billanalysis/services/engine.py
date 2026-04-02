@@ -65,9 +65,12 @@ class ErrorDetectionEngine:
             except Exception as exc:
                 # Log but do not let one detector crash the whole pipeline (FR-10)
                 import logging
+
                 logging.error(
                     "Detector %s raised an exception: %s",
-                    detector.module_name, exc, exc_info=True
+                    detector.module_name,
+                    exc,
+                    exc_info=True,
                 )
                 findings = []
 
@@ -87,6 +90,7 @@ class ErrorDetectionEngine:
 
         if defects:
             import logging
+
             logging.warning("DetectionResult defects found: %s", defects)
 
         return {

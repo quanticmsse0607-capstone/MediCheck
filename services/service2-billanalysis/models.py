@@ -15,6 +15,7 @@ from extensions import db
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _new_uuid():
     return str(uuid.uuid4())
 
@@ -25,6 +26,7 @@ def _now():
 
 # ── Valid session statuses (FR-26) ────────────────────────────────────────────
 
+
 class SessionStatus:
     EXTRACTED = "extracted"
     CONFIRMED = "confirmed"
@@ -34,9 +36,9 @@ class SessionStatus:
     # Ordered transitions — a request is valid only if current status matches
     # the expected predecessor
     TRANSITIONS = {
-        EXTRACTED: None,           # set on upload, no predecessor
-        CONFIRMED: EXTRACTED,      # confirm requires extracted
-        ANALYSED: CONFIRMED,       # analyse requires confirmed
+        EXTRACTED: None,  # set on upload, no predecessor
+        CONFIRMED: EXTRACTED,  # confirm requires extracted
+        ANALYSED: CONFIRMED,  # analyse requires confirmed
         LETTER_GENERATED: ANALYSED,  # letter requires analysed
     }
 
@@ -46,6 +48,7 @@ class SessionStatus:
 
 
 # ── Models ────────────────────────────────────────────────────────────────────
+
 
 class Session(db.Model):
     """
@@ -59,12 +62,20 @@ class Session(db.Model):
     session_id = db.Column(db.String(36), primary_key=True, default=_new_uuid)
     status = db.Column(db.String(32), nullable=False, default=SessionStatus.EXTRACTED)
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=_now)
-    updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=_now, onupdate=_now)
+    updated_at = db.Column(
+        db.DateTime(timezone=True), nullable=False, default=_now, onupdate=_now
+    )
 
     # Back-references
-    extracted_fields = db.relationship("ExtractedField", backref="session", lazy=True, cascade="all, delete-orphan")
-    analysis_results = db.relationship("AnalysisResult", backref="session", lazy=True, cascade="all, delete-orphan")
-    letter = db.relationship("DisputeLetter", backref="session", uselist=False, cascade="all, delete-orphan")
+    extracted_fields = db.relationship(
+        "ExtractedField", backref="session", lazy=True, cascade="all, delete-orphan"
+    )
+    analysis_results = db.relationship(
+        "AnalysisResult", backref="session", lazy=True, cascade="all, delete-orphan"
+    )
+    letter = db.relationship(
+        "DisputeLetter", backref="session", uselist=False, cascade="all, delete-orphan"
+    )
 
     def to_dict(self):
         return {
@@ -85,18 +96,22 @@ class ExtractedField(db.Model):
     __tablename__ = "extracted_fields"
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    session_id = db.Column(db.String(36), db.ForeignKey("sessions.session_id"), nullable=False)
+    session_id = db.Column(
+        db.String(36), db.ForeignKey("sessions.session_id"), nullable=False
+    )
 
     # Top-level fields
     patient_name = db.Column(db.String(256))
     provider_name = db.Column(db.String(256))
-    date_of_service = db.Column(db.String(32))   # stored as ISO string
+    date_of_service = db.Column(db.String(32))  # stored as ISO string
     total_billed = db.Column(db.Numeric(10, 2))
 
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=_now)
 
     # Line items stored as a relationship
-    line_items = db.relationship("LineItem", backref="extracted_field", lazy=True, cascade="all, delete-orphan")
+    line_items = db.relationship(
+        "LineItem", backref="extracted_field", lazy=True, cascade="all, delete-orphan"
+    )
 
     def to_dict(self):
         return {
@@ -118,11 +133,15 @@ class LineItem(db.Model):
     __tablename__ = "line_items"
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    extracted_field_id = db.Column(db.Integer, db.ForeignKey("extracted_fields.id"), nullable=False)
+    extracted_field_id = db.Column(
+        db.Integer, db.ForeignKey("extracted_fields.id"), nullable=False
+    )
 
     line_number = db.Column(db.Integer, nullable=False)
     cpt_code = db.Column(db.String(16))
-    description = db.Column(db.String(512), default="")  # always empty — AMA copyright (agreed decision)
+    description = db.Column(
+        db.String(512), default=""
+    )  # always empty — AMA copyright (agreed decision)
     quantity = db.Column(db.Integer, default=1)
     source = db.Column(db.String(8), nullable=False, default="bill")  # 'bill' or 'eob'
 
@@ -138,7 +157,11 @@ class LineItem(db.Model):
     @property
     def amount(self):
         """Return corrected amount if available, otherwise extracted."""
-        return float(self.corrected_amount) if self.corrected_amount is not None else float(self.extracted_amount or 0)
+        return (
+            float(self.corrected_amount)
+            if self.corrected_amount is not None
+            else float(self.extracted_amount or 0)
+        )
 
     def to_dict(self, include_confidence=False):
         d = {
@@ -164,31 +187,40 @@ class AnalysisResult(db.Model):
     __tablename__ = "analysis_results"
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    session_id = db.Column(db.String(36), db.ForeignKey("sessions.session_id"), nullable=False)
+    session_id = db.Column(
+        db.String(36), db.ForeignKey("sessions.session_id"), nullable=False
+    )
 
-    error_id = db.Column(db.String(16), nullable=False)       # e.g. "err_001"
-    module = db.Column(db.String(64), nullable=False)          # e.g. "duplicate_charge"
+    error_id = db.Column(db.String(16), nullable=False)  # e.g. "err_001"
+    module = db.Column(db.String(64), nullable=False)  # e.g. "duplicate_charge"
     error_type = db.Column(db.String(128), nullable=False)
     description = db.Column(db.Text, nullable=False)
-    line_items_affected = db.Column(db.Text)                   # JSON-encoded list of line numbers
+    line_items_affected = db.Column(db.Text)  # JSON-encoded list of line numbers
     estimated_dollar_impact = db.Column(db.Numeric(10, 2))
-    confidence = db.Column(db.String(8))                       # 'high', 'medium', 'low' (agreed decision)
+    confidence = db.Column(db.String(8))  # 'high', 'medium', 'low' (agreed decision)
 
     # RAG-populated fields — null if Service 3 timed out
     explanation = db.Column(db.Text)
-    citations = db.Column(db.Text)                             # JSON-encoded list of citation objects
+    citations = db.Column(db.Text)  # JSON-encoded list of citation objects
 
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=_now)
 
     def to_dict(self):
         import json
+
         return {
             "error_id": self.error_id,
             "module": self.module,
             "error_type": self.error_type,
             "description": self.description,
-            "line_items_affected": json.loads(self.line_items_affected) if self.line_items_affected else [],
-            "estimated_dollar_impact": float(self.estimated_dollar_impact) if self.estimated_dollar_impact else 0.0,
+            "line_items_affected": (
+                json.loads(self.line_items_affected) if self.line_items_affected else []
+            ),
+            "estimated_dollar_impact": (
+                float(self.estimated_dollar_impact)
+                if self.estimated_dollar_impact
+                else 0.0
+            ),
             "confidence": self.confidence,
             "explanation": self.explanation,
             "citations": json.loads(self.citations) if self.citations else [],
@@ -204,9 +236,11 @@ class DisputeLetter(db.Model):
     __tablename__ = "dispute_letters"
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    session_id = db.Column(db.String(36), db.ForeignKey("sessions.session_id"), nullable=False)
+    session_id = db.Column(
+        db.String(36), db.ForeignKey("sessions.session_id"), nullable=False
+    )
 
-    docx_path = db.Column(db.String(512))   # filesystem path to generated .docx
-    pdf_path = db.Column(db.String(512))    # filesystem path to generated .pdf
+    docx_path = db.Column(db.String(512))  # filesystem path to generated .docx
+    pdf_path = db.Column(db.String(512))  # filesystem path to generated .pdf
 
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=_now)

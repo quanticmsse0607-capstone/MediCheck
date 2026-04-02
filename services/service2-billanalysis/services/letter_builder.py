@@ -33,18 +33,18 @@ def build_docx(analysis_data: dict, letter_content: str | None, output_path: str
 
     # ── Page margins ──────────────────────────────────────────────────────────
     for section in doc.sections:
-        section.top_margin    = Inches(1.0)
+        section.top_margin = Inches(1.0)
         section.bottom_margin = Inches(1.0)
-        section.left_margin   = Inches(1.25)
-        section.right_margin  = Inches(1.25)
+        section.left_margin = Inches(1.25)
+        section.right_margin = Inches(1.25)
 
     # ── Patient header ────────────────────────────────────────────────────────
-    patient_name   = analysis_data.get("patient_name") or "[Patient Name]"
-    provider_name  = analysis_data.get("provider_name") or "[Provider Name]"
+    patient_name = analysis_data.get("patient_name") or "[Patient Name]"
+    provider_name = analysis_data.get("provider_name") or "[Provider Name]"
     date_of_service = analysis_data.get("date_of_service") or "[Date of Service]"
-    session_id     = analysis_data.get("session_id", "")
-    today          = date.today().strftime("%B %d, %Y")
-    total_savings  = analysis_data.get("total_estimated_savings", 0.0)
+    session_id = analysis_data.get("session_id", "")
+    today = date.today().strftime("%B %d, %Y")
+    total_savings = analysis_data.get("total_estimated_savings", 0.0)
 
     # Patient address block
     p = doc.add_paragraph()
@@ -63,8 +63,10 @@ def build_docx(analysis_data: dict, letter_content: str | None, output_path: str
 
     # Re: line
     p = doc.add_paragraph()
-    p.add_run(f"Re: Bill Reference #{session_id[:8].upper()}, "
-              f"Date of Service: {date_of_service}").bold = True
+    p.add_run(
+        f"Re: Bill Reference #{session_id[:8].upper()}, "
+        f"Date of Service: {date_of_service}"
+    ).bold = True
     doc.add_paragraph()
 
     # Salutation
@@ -83,10 +85,8 @@ def build_docx(analysis_data: dict, letter_content: str | None, output_path: str
     # ── Error list ────────────────────────────────────────────────────────────
     errors = analysis_data.get("errors", [])
     for idx, error in enumerate(errors, start=1):
-        cpt_codes = ", ".join(
-            str(li) for li in error.get("line_items_affected", [])
-        )
-        impact    = error.get("estimated_dollar_impact", 0.0)
+        cpt_codes = ", ".join(str(li) for li in error.get("line_items_affected", []))
+        impact = error.get("estimated_dollar_impact", 0.0)
         error_type = error.get("error_type", "Billing Error")
         description = error.get("description", "")
 
@@ -100,7 +100,7 @@ def build_docx(analysis_data: dict, letter_content: str | None, output_path: str
         citations = error.get("citations") or []
         if citations:
             for citation in citations:
-                source  = citation.get("source", "")
+                source = citation.get("source", "")
                 section = citation.get("section", "")
                 doc.add_paragraph(f"    Source: {source}, {section}")
 
@@ -125,9 +125,11 @@ def build_docx(analysis_data: dict, letter_content: str | None, output_path: str
     doc.add_paragraph()
 
     # ── Closing ───────────────────────────────────────────────────────────────
-    doc.add_paragraph("I request a written response within 30 days confirming the "
-                      "adjustments to be made. Please contact me at the address above "
-                      "if you require any additional information.")
+    doc.add_paragraph(
+        "I request a written response within 30 days confirming the "
+        "adjustments to be made. Please contact me at the address above "
+        "if you require any additional information."
+    )
     doc.add_paragraph()
     doc.add_paragraph("Sincerely,")
     doc.add_paragraph()
@@ -136,7 +138,9 @@ def build_docx(analysis_data: dict, letter_content: str | None, output_path: str
     doc.add_paragraph("[Email Address]")
     doc.add_paragraph()
     p = doc.add_paragraph()
-    p.add_run(f"MediCheck Analysis Reference: {session_id}").font.color.rgb = RGBColor(0x88, 0x88, 0x88)
+    p.add_run(f"MediCheck Analysis Reference: {session_id}").font.color.rgb = RGBColor(
+        0x88, 0x88, 0x88
+    )
     run = p.runs[0]
     run.font.size = Pt(8)
 
@@ -157,18 +161,18 @@ def build_pdf(analysis_data: dict, letter_content: str | None, output_path: str)
         bottomMargin=1.0 * inch,
     )
 
-    styles    = getSampleStyleSheet()
-    normal    = styles["Normal"]
+    styles = getSampleStyleSheet()
+    normal = styles["Normal"]
     bold_style = ParagraphStyle("Bold", parent=normal, fontName="Helvetica-Bold")
-    small      = ParagraphStyle("Small", parent=normal, fontSize=8, textColor=colors.grey)
+    small = ParagraphStyle("Small", parent=normal, fontSize=8, textColor=colors.grey)
 
-    patient_name    = analysis_data.get("patient_name") or "[Patient Name]"
-    provider_name   = analysis_data.get("provider_name") or "[Provider Name]"
+    patient_name = analysis_data.get("patient_name") or "[Patient Name]"
+    provider_name = analysis_data.get("provider_name") or "[Provider Name]"
     date_of_service = analysis_data.get("date_of_service") or "[Date of Service]"
-    session_id      = analysis_data.get("session_id", "")
-    today           = date.today().strftime("%B %d, %Y")
-    total_savings   = analysis_data.get("total_estimated_savings", 0.0)
-    errors          = analysis_data.get("errors", [])
+    session_id = analysis_data.get("session_id", "")
+    today = date.today().strftime("%B %d, %Y")
+    total_savings = analysis_data.get("total_estimated_savings", 0.0)
+    errors = analysis_data.get("errors", [])
 
     story = []
 
@@ -183,42 +187,47 @@ def build_pdf(analysis_data: dict, letter_content: str | None, output_path: str)
     story.append(Paragraph("Billing Department", normal))
     story.append(Spacer(1, 0.2 * inch))
 
-    story.append(Paragraph(
-        f"<b>Re: Bill Reference #{session_id[:8].upper()}, "
-        f"Date of Service: {date_of_service}</b>", normal
-    ))
+    story.append(
+        Paragraph(
+            f"<b>Re: Bill Reference #{session_id[:8].upper()}, "
+            f"Date of Service: {date_of_service}</b>",
+            normal,
+        )
+    )
     story.append(Spacer(1, 0.15 * inch))
 
     story.append(Paragraph("Dear Billing Department,", normal))
     story.append(Spacer(1, 0.1 * inch))
 
-    story.append(Paragraph(
-        f"I am writing to formally dispute charges on the above-referenced bill "
-        f"totalling <b>${total_savings:,.2f}</b>. After careful review of the itemised "
-        f"charges, I have identified the following billing errors:",
-        normal
-    ))
+    story.append(
+        Paragraph(
+            f"I am writing to formally dispute charges on the above-referenced bill "
+            f"totalling <b>${total_savings:,.2f}</b>. After careful review of the itemised "
+            f"charges, I have identified the following billing errors:",
+            normal,
+        )
+    )
     story.append(Spacer(1, 0.1 * inch))
 
     # Error list
     for idx, error in enumerate(errors, start=1):
-        impact     = error.get("estimated_dollar_impact", 0.0)
+        impact = error.get("estimated_dollar_impact", 0.0)
         error_type = error.get("error_type", "Billing Error")
         description = error.get("description", "")
-        citations  = error.get("citations") or []
+        citations = error.get("citations") or []
         line_items = ", ".join(str(li) for li in error.get("line_items_affected", []))
 
-        story.append(Paragraph(
-            f"<b>{idx}. {error_type} — ${impact:,.2f}</b>", normal
-        ))
+        story.append(Paragraph(f"<b>{idx}. {error_type} — ${impact:,.2f}</b>", normal))
         story.append(Paragraph(f"Line item(s): {line_items}", normal))
         story.append(Paragraph(description, normal))
 
         for citation in citations:
-            story.append(Paragraph(
-                f"Source: {citation.get('source', '')}, {citation.get('section', '')}",
-                normal
-            ))
+            story.append(
+                Paragraph(
+                    f"Source: {citation.get('source', '')}, {citation.get('section', '')}",
+                    normal,
+                )
+            )
 
         explanation = error.get("explanation")
         if explanation:
@@ -227,21 +236,27 @@ def build_pdf(analysis_data: dict, letter_content: str | None, output_path: str)
         story.append(Spacer(1, 0.08 * inch))
 
     story.append(Spacer(1, 0.1 * inch))
-    story.append(Paragraph(f"<b>Total Adjustment Requested: ${total_savings:,.2f}</b>", normal))
+    story.append(
+        Paragraph(f"<b>Total Adjustment Requested: ${total_savings:,.2f}</b>", normal)
+    )
     story.append(Spacer(1, 0.1 * inch))
 
     if letter_content:
         story.append(Paragraph(letter_content, normal))
     else:
-        story.append(Paragraph(_default_dispute_text(provider_name, total_savings), normal))
+        story.append(
+            Paragraph(_default_dispute_text(provider_name, total_savings), normal)
+        )
 
     story.append(Spacer(1, 0.15 * inch))
-    story.append(Paragraph(
-        "I request a written response within 30 days confirming the adjustments "
-        "to be made. Please contact me at the address above if you require any "
-        "additional information.",
-        normal
-    ))
+    story.append(
+        Paragraph(
+            "I request a written response within 30 days confirming the adjustments "
+            "to be made. Please contact me at the address above if you require any "
+            "additional information.",
+            normal,
+        )
+    )
     story.append(Spacer(1, 0.2 * inch))
     story.append(Paragraph("Sincerely,", normal))
     story.append(Spacer(1, 0.4 * inch))
@@ -255,6 +270,7 @@ def build_pdf(analysis_data: dict, letter_content: str | None, output_path: str)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _add_default_dispute_paragraph(doc, provider_name: str, total_savings: float):
     text = _default_dispute_text(provider_name, total_savings)
