@@ -1,1 +1,1 @@
-web: gunicorn app:app
+web: gunicorn --chdir services/service2-billanalysis app:app 
