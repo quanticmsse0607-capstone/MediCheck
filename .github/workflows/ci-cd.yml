@@ -167,7 +167,7 @@ jobs:
           echo "Service 2 deploy triggered"
 
       - name: Deploy Service 3 to Render
-        if: secrets.RENDER_SERVICE3_ID != ''
+        if: vars.SERVICE3_ENABLED == 'true'
         run: |
           curl -s -X POST \
             "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE3_ID }}/deploys" \
@@ -190,7 +190,7 @@ jobs:
           echo "Service 2 health check PASSED - HTTP $response"
 
       - name: Health check Service 3
-        if: secrets.RENDER_SERVICE3_ID != ''
+        if: vars.SERVICE3_ENABLED == 'true'
         run: |
           response=$(curl -s -o /dev/null -w "%{http_code}" \
             https://medicheck-rag.onrender.com/health)
