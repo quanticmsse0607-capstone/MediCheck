@@ -22,12 +22,12 @@ class DetectionResult:
     """
 
     # FR-16 required fields
-    module: str                           # name of the detector that produced this result
-    error_type: str                       # human-readable category e.g. "Duplicate Charge"
-    description: str                      # plain-English description of the issue
-    line_items_affected: list[int]        # line numbers of affected items
-    estimated_dollar_impact: float        # USD
-    confidence: str                       # 'high', 'medium', or 'low'
+    module: str  # name of the detector that produced this result
+    error_type: str  # human-readable category e.g. "Duplicate Charge"
+    description: str  # plain-English description of the issue
+    line_items_affected: list[int]  # line numbers of affected items
+    estimated_dollar_impact: float  # USD
+    confidence: str  # 'high', 'medium', or 'low'
 
     # RAG-populated fields — filled by rag_client after detection, null on timeout
     explanation: Optional[str] = None

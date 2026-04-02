@@ -11,8 +11,13 @@ def health():
     Does not require authentication (US-016 AC5).
     Must be implemented and responding before any other endpoint is ready (NFR-12).
     """
-    return jsonify({
-        "status": "ok",
-        "service": "bill-analysis",
-        "version": "1.0.0",
-    }), 200
+    return (
+        jsonify(
+            {
+                "status": "ok",
+                "service": "bill-analysis",
+                "version": "1.0.0",
+            }
+        ),
+        200,
+    )

@@ -27,7 +27,8 @@ class DuplicateChargeDetector(BaseDetector):
         """
         results = []
         bill_items = [
-            item for item in confirmed_fields.get("line_items", [])
+            item
+            for item in confirmed_fields.get("line_items", [])
             if item.get("source") == "bill" and item.get("cpt_code")
         ]
 
@@ -36,9 +37,9 @@ class DuplicateChargeDetector(BaseDetector):
         seen: dict[tuple, list] = {}
 
         for item in bill_items:
-            cpt  = item["cpt_code"]
+            cpt = item["cpt_code"]
             date = item.get("date") or session_date
-            key  = (cpt, date)
+            key = (cpt, date)
 
             if key not in seen:
                 seen[key] = []
@@ -56,18 +57,23 @@ class DuplicateChargeDetector(BaseDetector):
 
                 dollar_impact = float(duplicate.get("amount", 0))
 
-                results.append(DetectionResult(
-                    module=self.module_name,
-                    error_type="Duplicate Charge",
-                    description=(
-                        f"CPT {cpt} appears {len(items)} time(s) on {date}. "
-                        f"Line items {original['line_number']} and {duplicate['line_number']} "
-                        f"bill the same procedure on the same date. "
-                        f"Duplicate billing for a single encounter is not permitted."
-                    ),
-                    line_items_affected=[original["line_number"], duplicate["line_number"]],
-                    estimated_dollar_impact=dollar_impact,
-                    confidence="high",
-                ))
+                results.append(
+                    DetectionResult(
+                        module=self.module_name,
+                        error_type="Duplicate Charge",
+                        description=(
+                            f"CPT {cpt} appears {len(items)} time(s) on {date}. "
+                            f"Line items {original['line_number']} and {duplicate['line_number']} "
+                            f"bill the same procedure on the same date. "
+                            f"Duplicate billing for a single encounter is not permitted."
+                        ),
+                        line_items_affected=[
+                            original["line_number"],
+                            duplicate["line_number"],
+                        ],
+                        estimated_dollar_impact=dollar_impact,
+                        confidence="high",
+                    )
+                )
 
         return results

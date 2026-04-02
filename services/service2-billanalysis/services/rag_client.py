@@ -65,7 +65,8 @@ class RAGClient:
             # NFR-02: timeout → partial response, rag_available: false
             logger.warning(
                 "Service 3 /explain timed out after %ss for session %s",
-                self.timeout, session_id
+                self.timeout,
+                session_id,
             )
             return {
                 "success": False,
@@ -112,10 +113,13 @@ class RAGClient:
         except requests.Timeout:
             logger.warning(
                 "Service 3 /draft-letter timed out after %ss for session %s",
-                self.timeout, session_id
+                self.timeout,
+                session_id,
             )
             return {"success": False, "letter_content": None}
 
         except requests.RequestException as exc:
-            logger.error("Service 3 /draft-letter error for session %s: %s", session_id, exc)
+            logger.error(
+                "Service 3 /draft-letter error for session %s: %s", session_id, exc
+            )
             return {"success": False, "letter_content": None}

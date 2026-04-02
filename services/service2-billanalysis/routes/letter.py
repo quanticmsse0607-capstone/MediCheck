@@ -14,10 +14,10 @@ from models import Session, ExtractedField, AnalysisResult, DisputeLetter, Sessi
 from services.rag_client import RAGClient
 from services.letter_builder import build_docx, build_pdf
 
-letter_bp  = Blueprint("letter", __name__)
+letter_bp = Blueprint("letter", __name__)
 rag_client = RAGClient()
 
-ERR_SESSION_NOT_FOUND   = "SESSION_NOT_FOUND"
+ERR_SESSION_NOT_FOUND = "SESSION_NOT_FOUND"
 ERR_NO_ANALYSIS_RESULTS = "NO_ANALYSIS_RESULTS"
 
 
@@ -34,33 +34,50 @@ def generate_letter():
     Response 404: SESSION_NOT_FOUND or NO_ANALYSIS_RESULTS
     """
 
-    data       = request.get_json(silent=True) or {}
+    data = request.get_json(silent=True) or {}
     session_id = data.get("session_id")
 
     # ── 1. Validate session ───────────────────────────────────────────────────
     session = Session.query.get(session_id)
     if not session:
-        return _error(404, ERR_SESSION_NOT_FOUND,
-                      "No session found for the provided session_id.", session_id)
+        return _error(
+            404,
+            ERR_SESSION_NOT_FOUND,
+            "No session found for the provided session_id.",
+            session_id,
+        )
 
     # ── 2. Check analysis results exist (NFR-17: HTTP 404 if no analysis) ─────
     results = AnalysisResult.query.filter_by(session_id=session_id).all()
     if session.status not in (SessionStatus.ANALYSED, SessionStatus.LETTER_GENERATED):
-        return _error(404, ERR_NO_ANALYSIS_RESULTS,
-                      "No analysis results found for this session. "
-                      "Run POST /analyse before requesting a letter.", session_id)
+        return _error(
+            404,
+            ERR_NO_ANALYSIS_RESULTS,
+            "No analysis results found for this session. "
+            "Run POST /analyse before requesting a letter.",
+            session_id,
+        )
 
     # ── 3. If letter already generated, return existing download URLs (FR-23) ─
     existing = DisputeLetter.query.filter_by(session_id=session_id).first()
-    if existing and os.path.exists(existing.docx_path or "") and os.path.exists(existing.pdf_path or ""):
-        return jsonify({
-            "session_id": session_id,
-            "status": "letter_generated",
-            "downloads": {
-                "docx": _download_url(session_id, "letter.docx"),
-                "pdf":  _download_url(session_id, "letter.pdf"),
-            }
-        }), 200
+    if (
+        existing
+        and os.path.exists(existing.docx_path or "")
+        and os.path.exists(existing.pdf_path or "")
+    ):
+        return (
+            jsonify(
+                {
+                    "session_id": session_id,
+                    "status": "letter_generated",
+                    "downloads": {
+                        "docx": _download_url(session_id, "letter.docx"),
+                        "pdf": _download_url(session_id, "letter.pdf"),
+                    },
+                }
+            ),
+            200,
+        )
 
     # ── 4. Load data for letter ───────────────────────────────────────────────
     extracted = ExtractedField.query.filter_by(session_id=session_id).first()
@@ -84,7 +101,7 @@ def generate_letter():
     os.makedirs(output_dir, exist_ok=True)
 
     docx_path = os.path.join(output_dir, "letter.docx")
-    pdf_path  = os.path.join(output_dir, "letter.pdf")
+    pdf_path = os.path.join(output_dir, "letter.pdf")
 
     # ── 7. Generate Word and PDF ──────────────────────────────────────────────
     build_docx(analysis_data, letter_content, docx_path)
@@ -93,25 +110,32 @@ def generate_letter():
     # ── 8. Persist letter record ──────────────────────────────────────────────
     if existing:
         existing.docx_path = docx_path
-        existing.pdf_path  = pdf_path
+        existing.pdf_path = pdf_path
     else:
-        db.session.add(DisputeLetter(
-            session_id=session_id,
-            docx_path=docx_path,
-            pdf_path=pdf_path,
-        ))
+        db.session.add(
+            DisputeLetter(
+                session_id=session_id,
+                docx_path=docx_path,
+                pdf_path=pdf_path,
+            )
+        )
 
     session.status = SessionStatus.LETTER_GENERATED
     db.session.commit()
 
-    return jsonify({
-        "session_id": session_id,
-        "status": "letter_generated",
-        "downloads": {
-            "docx": _download_url(session_id, "letter.docx"),
-            "pdf":  _download_url(session_id, "letter.pdf"),
-        }
-    }), 200
+    return (
+        jsonify(
+            {
+                "session_id": session_id,
+                "status": "letter_generated",
+                "downloads": {
+                    "docx": _download_url(session_id, "letter.docx"),
+                    "pdf": _download_url(session_id, "letter.pdf"),
+                },
+            }
+        ),
+        200,
+    )
 
 
 @letter_bp.get("/download/<session_id>/<filename>")
@@ -121,17 +145,28 @@ def download_file(session_id: str, filename: str):
     Both formats are retrievable without re-running analysis (FR-23).
     """
     if filename not in ("letter.docx", "letter.pdf"):
-        return _error(400, "INVALID_FILENAME", "filename must be letter.docx or letter.pdf", session_id)
+        return _error(
+            400,
+            "INVALID_FILENAME",
+            "filename must be letter.docx or letter.pdf",
+            session_id,
+        )
 
     letter = DisputeLetter.query.filter_by(session_id=session_id).first()
     if not letter:
-        return _error(404, ERR_NO_ANALYSIS_RESULTS,
-                      "No letter found for this session.", session_id)
+        return _error(
+            404,
+            ERR_NO_ANALYSIS_RESULTS,
+            "No letter found for this session.",
+            session_id,
+        )
 
     path = letter.docx_path if filename == "letter.docx" else letter.pdf_path
 
     if not path or not os.path.exists(path):
-        return _error(404, "FILE_NOT_FOUND", "Letter file not found on server.", session_id)
+        return _error(
+            404, "FILE_NOT_FOUND", "Letter file not found on server.", session_id
+        )
 
     mimetype = (
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -149,6 +184,7 @@ def download_file(session_id: str, filename: str):
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _download_url(session_id: str, filename: str) -> str:
     """Build absolute download URL (agreed decision: full absolute URLs)."""
     base = current_app.config.get("SERVICE2_BASE_URL", "http://localhost:5000")
@@ -156,8 +192,13 @@ def _download_url(session_id: str, filename: str) -> str:
 
 
 def _error(status: int, code: str, message: str, session_id=None):
-    return jsonify({
-        "error_code": code,
-        "message": message,
-        "session_id": session_id,
-    }), status
+    return (
+        jsonify(
+            {
+                "error_code": code,
+                "message": message,
+                "session_id": session_id,
+            }
+        ),
+        status,
+    )

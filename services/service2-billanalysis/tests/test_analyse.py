@@ -8,6 +8,7 @@ import pytest
 import json
 import sys
 import os
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from app import create_app
@@ -18,12 +19,14 @@ from models import Session, ExtractedField, LineItem, SessionStatus
 @pytest.fixture
 def app():
     application = create_app("development")
-    application.config.update({
-        "TESTING": True,
-        "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
-        "SERVICE3_URL": "http://mock-service3",
-        "SERVICE3_TIMEOUT_SECONDS": 10,
-    })
+    application.config.update(
+        {
+            "TESTING": True,
+            "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+            "SERVICE3_URL": "http://mock-service3",
+            "SERVICE3_TIMEOUT_SECONDS": 10,
+        }
+    )
     return application
 
 
@@ -53,22 +56,26 @@ def confirmed_session(app):
         _db.session.add(extracted)
         _db.session.flush()
 
-        _db.session.add(LineItem(
-            extracted_field_id=extracted.id,
-            line_number=1,
-            cpt_code="29881",
-            extracted_amount=3200.00,
-            confidence=0.97,
-            source="bill",
-        ))
-        _db.session.add(LineItem(
-            extracted_field_id=extracted.id,
-            line_number=7,
-            cpt_code="29881",
-            extracted_amount=3200.00,
-            confidence=0.97,
-            source="bill",
-        ))
+        _db.session.add(
+            LineItem(
+                extracted_field_id=extracted.id,
+                line_number=1,
+                cpt_code="29881",
+                extracted_amount=3200.00,
+                confidence=0.97,
+                source="bill",
+            )
+        )
+        _db.session.add(
+            LineItem(
+                extracted_field_id=extracted.id,
+                line_number=7,
+                cpt_code="29881",
+                extracted_amount=3200.00,
+                confidence=0.97,
+                source="bill",
+            )
+        )
 
         _db.session.commit()
         return session.session_id
@@ -103,10 +110,12 @@ class TestAnalyseEndpoint:
                 "explanations": {
                     "err_001": {
                         "explanation": "Duplicate billing is not permitted.",
-                        "citations": [{"source": "CMS Manual", "section": "Ch 23", "url": ""}],
+                        "citations": [
+                            {"source": "CMS Manual", "section": "Ch 23", "url": ""}
+                        ],
                     }
-                }
-            }
+                },
+            },
         )
 
         response = client.post("/analyse", json={"session_id": confirmed_session})
@@ -117,7 +126,9 @@ class TestAnalyseEndpoint:
         assert data["total_errors"] >= 1
         assert data["errors"][0]["explanation"] == "Duplicate billing is not permitted."
 
-    def test_analyse_partial_response_on_rag_timeout(self, app, client, confirmed_session, mocker):
+    def test_analyse_partial_response_on_rag_timeout(
+        self, app, client, confirmed_session, mocker
+    ):
         """
         NFR-02, US-015: When Service 3 times out, return partial response.
         explanation: null, citations: [], rag_available: false.
@@ -129,7 +140,7 @@ class TestAnalyseEndpoint:
                 "success": False,
                 "rag_available": False,
                 "explanations": {},
-            }
+            },
         )
 
         response = client.post("/analyse", json={"session_id": confirmed_session})
@@ -156,20 +167,22 @@ class TestAnalyseEndpoint:
             )
             _db.session.add(extracted)
             _db.session.flush()
-            _db.session.add(LineItem(
-                extracted_field_id=extracted.id,
-                line_number=1,
-                cpt_code="99999",  # CPT not in any fee schedule
-                extracted_amount=82.00,
-                confidence=0.99,
-                source="bill",
-            ))
+            _db.session.add(
+                LineItem(
+                    extracted_field_id=extracted.id,
+                    line_number=1,
+                    cpt_code="99999",  # CPT not in any fee schedule
+                    extracted_amount=82.00,
+                    confidence=0.99,
+                    source="bill",
+                )
+            )
             _db.session.commit()
             sid = session.session_id
 
         mocker.patch(
             "routes.analyse.rag_client.get_explanations",
-            return_value={"success": True, "rag_available": True, "explanations": {}}
+            return_value={"success": True, "rag_available": True, "explanations": {}},
         )
 
         response = client.post("/analyse", json={"session_id": sid})

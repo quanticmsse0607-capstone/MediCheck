@@ -8,7 +8,7 @@ class Config:
 
     # OpenAI
     OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
-    OPENAI_MODEL   = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+    OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
 
     # ChromaDB — vector store for RAG knowledge base
     CHROMA_PERSIST_PATH = os.environ.get("CHROMA_PERSIST_PATH", "./chroma_db")
@@ -34,6 +34,6 @@ class ProductionConfig(Config):
 
 config = {
     "development": DevelopmentConfig,
-    "production":  ProductionConfig,
-    "default":     DevelopmentConfig,
+    "production": ProductionConfig,
+    "default": DevelopmentConfig,
 }

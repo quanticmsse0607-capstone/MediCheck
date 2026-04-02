@@ -59,14 +59,15 @@ class MedicareRateDetector(BaseDetector):
         results = []
 
         bill_items = [
-            item for item in confirmed_fields.get("line_items", [])
+            item
+            for item in confirmed_fields.get("line_items", [])
             if item.get("source") == "bill" and item.get("cpt_code")
         ]
 
         for item in bill_items:
-            cpt         = item["cpt_code"]
-            billed      = float(item.get("amount", 0))
-            medicare    = self._get_medicare_rate(cpt)
+            cpt = item["cpt_code"]
+            billed = float(item.get("amount", 0))
+            medicare = self._get_medicare_rate(cpt)
 
             if medicare is None or medicare <= 0:
                 continue  # No rate data for this CPT — skip, not an error
@@ -77,18 +78,20 @@ class MedicareRateDetector(BaseDetector):
                 percentage = round(ratio * 100)
                 dollar_impact = round(billed - medicare, 2)
 
-                results.append(DetectionResult(
-                    module=self.module_name,
-                    error_type="Medicare Rate Outlier",
-                    description=(
-                        f"CPT {cpt} is billed at ${billed:.2f}, which is {percentage}% of the "
-                        f"Medicare rate of ${medicare:.2f} ({DEFAULT_LOCALITY_NAME}). "
-                        f"Charges exceeding 300% of the Medicare rate are flagged as outliers."
-                    ),
-                    line_items_affected=[item["line_number"]],
-                    estimated_dollar_impact=dollar_impact,
-                    confidence=self._confidence_from_ratio(ratio),
-                ))
+                results.append(
+                    DetectionResult(
+                        module=self.module_name,
+                        error_type="Medicare Rate Outlier",
+                        description=(
+                            f"CPT {cpt} is billed at ${billed:.2f}, which is {percentage}% of the "
+                            f"Medicare rate of ${medicare:.2f} ({DEFAULT_LOCALITY_NAME}). "
+                            f"Charges exceeding 300% of the Medicare rate are flagged as outliers."
+                        ),
+                        line_items_affected=[item["line_number"]],
+                        estimated_dollar_impact=dollar_impact,
+                        confidence=self._confidence_from_ratio(ratio),
+                    )
+                )
 
         return results
 
