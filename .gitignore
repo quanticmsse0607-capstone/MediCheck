@@ -219,11 +219,6 @@ build/
 # ── MediCheck — Vector store ──────────────────────────────────────────────────
 chroma_db/
 
-# ── MediCheck — Processed documents ─────────────────────────────────────
-services/service3-rag/data/processed/*.csv
-services/service3-rag/data/raw/*.csv 
-services/service3-rag/data/raw/*.txt
-
 # ── MediCheck — Synthetic test documents ─────────────────────────────────────
 # PDFs are reproducible from test-data/generate_test_data.py
 # Remove these lines if you prefer to commit them for convenience
