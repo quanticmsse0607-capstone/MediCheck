@@ -191,6 +191,7 @@ plain-language explanations and regulatory citations.
 | File | Pages | Content | Detection module |
 |---|---|---|---|
 | `icd_10_cm_october_2025_guidelines_0.pdf` | 121 | ICD-10-CM official coding guidelines FY2026 | All modules |
+| `RVU26B.pdf` | ~10 | CMS Physician Fee Schedule file layout and rate calculation methodology — explains how Medicare payment amounts are derived from RVUs and GPCIs | Module 2 |
 | `nsa-at-a-glance.pdf` | 3 | No Surprises Act overview and key protections | Module 4 |
 | `nsa-helping-consumers.pdf` | 11 | Action scenarios for NSA violations | Module 4 |
 | `nsa-keyprotections_1.pdf` | 22 | Detailed consumer protections, cost sharing, emergency services | Module 4 |
@@ -214,7 +215,7 @@ source venv/bin/activate   # Windows: venv\Scripts\activate
 python ingest.py
 ```
 
-Requires `OPENAI_API_KEY` in `.env`. Produces approximately 292 chunks embedded
+Requires `OPENAI_API_KEY` in `.env`. Produces 309 chunks embedded
 with `text-embedding-3-small` and persisted to `data/chroma_db/`.
 
 To rebuild from scratch:

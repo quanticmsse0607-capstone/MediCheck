@@ -66,6 +66,7 @@ DOCUMENT_TITLES = {
     "nsa-keyprotections_1.pdf":                "No Surprises Act: Overview of Key Consumer Protections",
     "surprise-billing-requirements-final-rules-fact-sheet.pdf":
                                                "Requirements Related to Surprise Billing: Final Rules Fact Sheet",
+    "RVU26B.pdf":                              "CMS Physician Fee Schedule: File Layout and Rate Calculation Methodology (2026)",
 }
 
 # ICD-10 heading patterns — used to detect natural section boundaries
@@ -310,15 +311,12 @@ def build_vector_store(
             # Subsequent batches — add to existing collection
             vector_store.add_documents(batch)
 
-        # Persist after each batch so progress isn't lost on failure
-        vector_store.persist()
-
         # Wait between batches to respect TPM limit (skip after last batch)
         if i + batch_size < len(chunks):
             logger.info(f"  Waiting {batch_delay}s before next batch...")
             time.sleep(batch_delay)
 
-    logger.info(f"Vector store persisted to {db_path}")
+    logger.info(f"Vector store ready at {db_path}")
     return vector_store
 
 

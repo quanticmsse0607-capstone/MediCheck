@@ -256,6 +256,7 @@ The ChromaDB vector store is gitignored and must be built locally before Service
 | File | Format | Source | Relevance |
 |---|---|---|---|
 | `icd_10_cm_october_2025_guidelines_0.pdf` | PDF | [cms.gov/medicare/coding-billing/icd-10-codes](https://www.cms.gov/medicare/coding-billing/icd-10-codes) | ICD-10-CM coding guidelines — supports billing error explanations |
+| `RVU26B.pdf` | PDF | [cms.gov/medicare/payment/fee-schedules/physician](https://www.cms.gov/medicare/payment/fee-schedules/physician) | CMS Physician Fee Schedule file layout and rate calculation methodology — Module 2 explanations |
 | `nsa-at-a-glance.pdf` | PDF | [cms.gov/files/document/nsa-at-a-glance.pdf](https://www.cms.gov/files/document/nsa-at-a-glance.pdf) | No Surprises Act overview — Module 4 citations |
 | `nsa-helping-consumers.pdf` | PDF | [cms.gov/files/document/nsa-helping-consumers.pdf](https://www.cms.gov/files/document/nsa-helping-consumers.pdf) | Patient-facing NSA guidance — Module 4 plain-English explanations |
 | `nsa-keyprotections_1.pdf` | PDF | [cms.gov/files/document/nsa-keyprotections.pdf](https://www.cms.gov/files/document/nsa-keyprotections.pdf) | Key consumer protections — Module 4 citations |
