@@ -93,7 +93,7 @@ The following are excluded from version control and must be sourced locally or r
 
 | Path | Reason | How to regenerate |
 |---|---|---|
-| `services/service3-rag/chroma_db/` | Vector store — rebuilt on each ingest | Run `python ingest.py` in `services/service3-rag/` |
+| `services/service3-rag/data/chroma_db/` | Vector store — rebuilt on each ingest | Run `python ingest.py` in `services/service3-rag/` |
 | `test-data/synthetic/*.pdf` | Synthetic test PDFs | Run `python test-data/generate_test_data.py` |
 | `venv/` | Python virtual environments | Run `pip install -r requirements-dev.txt` in each service directory |
 | `node_modules/` | Node dependencies | Run `npm install` in `services/service1-frontend/` |
@@ -260,10 +260,8 @@ The ChromaDB vector store is gitignored and must be built locally before Service
 | `nsa-helping-consumers.pdf` | PDF | [cms.gov/files/document/nsa-helping-consumers.pdf](https://www.cms.gov/files/document/nsa-helping-consumers.pdf) | Patient-facing NSA guidance — Module 4 plain-English explanations |
 | `nsa-keyprotections_1.pdf` | PDF | [cms.gov/files/document/nsa-keyprotections.pdf](https://www.cms.gov/files/document/nsa-keyprotections.pdf) | Key consumer protections — Module 4 citations |
 | `surprise-billing-requirements-final-rules-fact-sheet.pdf` | PDF | [cms.gov/nosurprises](https://www.cms.gov/nosurprises) | Final rules summary — QPA disclosure and IDR payment determination |
-| `What_You_Need_to_Know...July2021.html` | HTML | [cms.gov/newsroom](https://www.cms.gov/newsroom) | Part I interim final rule plain-language summary — emergency and ancillary service protections |
-| `What_You_Need_to_Know...September2021.html` | HTML | [cms.gov/newsroom](https://www.cms.gov/newsroom) | Part II interim final rule plain-language summary — good faith estimates and IDR process |
 
-> **Documents intentionally excluded:** `Requirements_Related_to_Surprise_Billing_Part1.pdf` and `Part2.pdf` are excluded — they are image-based scanned PDFs with no extractable text. The HTML equivalents above cover the same content. The IDR process proposed rule fact sheet and the Prescription Drug interim final rule are also excluded as outside MediCheck's scope.
+> **Documents intentionally excluded:** `Requirements_Related_to_Surprise_Billing_Part1.pdf` and `Part2.pdf` are excluded — they are image-based scanned PDFs with no extractable text. The IDR process proposed rule fact sheet and the Prescription Drug interim final rule are also excluded as outside MediCheck's scope.
 
 **Step 1 — Build the vector store**
 

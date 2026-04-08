@@ -8,13 +8,11 @@ data/chroma_db/.
 
 Source documents:
     PDFs  — loaded with PyPDFLoader, split with RecursiveCharacterTextSplitter
-    HTML  — loaded with BSHTMLLoader, split with RecursiveCharacterTextSplitter
 
 Chunking strategy:
     - ICD-10-CM guidelines: heading-aware splitting (Section/Chapter headings
       used as natural split points before falling back to token window)
     - NSA PDFs: paragraph-based splitting within 500-token window
-    - HTML files: paragraph-based splitting within 500-token window
     - All chunks: 500 tokens, 50-token overlap, per Trello Story 2 AC
 
 Metadata per chunk:
@@ -37,11 +35,10 @@ import re
 import sys
 from pathlib import Path
 
-from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from langchain.schema import Document
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.document_loaders import BSHTMLLoader, PyPDFLoader
+from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.vectorstores import Chroma
 from langchain_openai import OpenAIEmbeddings
 
@@ -69,10 +66,6 @@ DOCUMENT_TITLES = {
     "nsa-keyprotections_1.pdf":                "No Surprises Act: Overview of Key Consumer Protections",
     "surprise-billing-requirements-final-rules-fact-sheet.pdf":
                                                "Requirements Related to Surprise Billing: Final Rules Fact Sheet",
-    "What_You_Need_to_Know_about_the_Biden-Harris_Administration_s_Actions_to_Prevent_Surprise_Billing___CMS.html":
-                                               "What You Need to Know: Actions to Prevent Surprise Billing (July 2021)",
-    "What_You_Need_to_Know_about_the_Biden-Harris_Administration_s_Actions_to_Prevent_Surprise_Billing-September2021.html":
-                                               "What You Need to Know: Actions to Prevent Surprise Billing (September 2021)",
 }
 
 # ICD-10 heading patterns — used to detect natural section boundaries
@@ -96,45 +89,6 @@ def load_pdf(filepath: Path) -> list[Document]:
         page.metadata["document_title"] = DOCUMENT_TITLES.get(filepath.name, filepath.stem)
     logger.info(f"    {len(pages)} pages loaded")
     return pages
-
-
-def load_html(filepath: Path) -> list[Document]:
-    """
-    Load an HTML file using BSHTMLLoader.
-    Strips navigation, header, footer, and script elements before extraction
-    to avoid embedding boilerplate CMS website chrome.
-    """
-    logger.info(f"  Loading HTML: {filepath.name}")
-
-    with open(filepath, encoding="utf-8", errors="ignore") as f:
-        raw_html = f.read()
-
-    soup = BeautifulSoup(raw_html, "lxml")
-
-    # Remove boilerplate elements
-    for tag in soup(["script", "style", "nav", "footer", "header",
-                     "noscript", "iframe", "form"]):
-        tag.decompose()
-
-    # Also remove CMS site navigation divs by common class patterns
-    for tag in soup.find_all(class_=re.compile(r"nav|menu|sidebar|breadcrumb|footer|header", re.I)):
-        tag.decompose()
-
-    text = soup.get_text(separator="\n", strip=True)
-
-    # Remove excessive blank lines
-    text = re.sub(r"\n{3,}", "\n\n", text)
-
-    doc = Document(
-        page_content=text,
-        metadata={
-            "source": filepath.name,
-            "document_title": DOCUMENT_TITLES.get(filepath.name, filepath.stem),
-            "page_number": 1,
-        }
-    )
-    logger.info(f"    {len(text.split())} words extracted")
-    return [doc]
 
 
 # ── Chunking ──────────────────────────────────────────────────────────────────
@@ -273,10 +227,8 @@ def load_and_chunk_all(raw_dir: Path) -> list[Document]:
     # Define processing order — ICD-10 first (largest, most chunks)
     pdf_files = [f for f in sorted(raw_dir.glob("*.pdf"))
                  if f.name in DOCUMENT_TITLES]
-    html_files = [f for f in sorted(raw_dir.glob("*.html"))
-                  if f.name in DOCUMENT_TITLES]
 
-    logger.info(f"Found {len(pdf_files)} PDFs and {len(html_files)} HTML files to ingest")
+    logger.info(f"Found {len(pdf_files)} PDFs to ingest")
 
     for pdf_path in pdf_files:
         pages = load_pdf(pdf_path)
@@ -290,12 +242,6 @@ def load_and_chunk_all(raw_dir: Path) -> list[Document]:
             chunks = split_standard(pages)
 
         logger.info(f"  → {len(chunks)} chunks from {pdf_path.name}")
-        all_chunks.extend(chunks)
-
-    for html_path in html_files:
-        docs = load_html(html_path)
-        chunks = split_standard(docs)
-        logger.info(f"  → {len(chunks)} chunks from {html_path.name}")
         all_chunks.extend(chunks)
 
     return all_chunks
