@@ -63,7 +63,7 @@ _GPCI_COLUMNS = [
     "locality_number",
     "locality_name",
     "work_gpci_no_floor",
-    "work_gpci",       # with 1.0 floor — used for 2026 payments
+    "work_gpci",  # with 1.0 floor — used for 2026 payments
     "pe_gpci",
     "mp_gpci",
 ]
@@ -93,7 +93,7 @@ def load_gpci_file(filepath: str | Path) -> pd.DataFrame:
     # Read with 3 header rows skipped, no footer parsing
     df = pd.read_csv(
         filepath,
-        skiprows=3,         # skip title row, blank row, column header row
+        skiprows=3,  # skip title row, blank row, column header row
         header=None,
         names=_GPCI_COLUMNS,
         dtype=str,
@@ -158,8 +158,7 @@ def compute_locality_rates(
         ]
         if locality_gpci.empty:
             raise ValueError(
-                f"No GPCI data found for state {state}, "
-                f"locality {locality_number}"
+                f"No GPCI data found for state {state}, " f"locality {locality_number}"
             )
     else:
         locality_gpci = state_gpci
@@ -172,9 +171,9 @@ def compute_locality_rates(
 
     gpci_row = locality_gpci.iloc[0]
     work_gpci = gpci_row["work_gpci"]
-    pe_gpci   = gpci_row["pe_gpci"]
-    mp_gpci   = gpci_row["mp_gpci"]
-    locality  = gpci_row["locality_name"]
+    pe_gpci = gpci_row["pe_gpci"]
+    mp_gpci = gpci_row["mp_gpci"]
+    locality = gpci_row["locality_name"]
 
     logger.info(
         f"Applying GPCIs for {locality} ({state}): "
@@ -185,25 +184,25 @@ def compute_locality_rates(
 
     # Locality-adjusted non-facility rate
     df["rate_non_facility_adj"] = (
-        (df["work_rvu"]            * work_gpci) +
-        (df["non_facility_pe_rvu"] * pe_gpci)   +
-        (df["malpractice_rvu"]     * mp_gpci)
+        (df["work_rvu"] * work_gpci)
+        + (df["non_facility_pe_rvu"] * pe_gpci)
+        + (df["malpractice_rvu"] * mp_gpci)
     ) * df["conversion_factor"]
     df["rate_non_facility_adj"] = df["rate_non_facility_adj"].round(2)
 
     # Locality-adjusted facility rate
     df["rate_facility_adj"] = (
-        (df["work_rvu"]        * work_gpci) +
-        (df["facility_pe_rvu"] * pe_gpci)   +
-        (df["malpractice_rvu"] * mp_gpci)
+        (df["work_rvu"] * work_gpci)
+        + (df["facility_pe_rvu"] * pe_gpci)
+        + (df["malpractice_rvu"] * mp_gpci)
     ) * df["conversion_factor"]
     df["rate_facility_adj"] = df["rate_facility_adj"].round(2)
 
     # Tag with locality info
     df["locality_name"] = locality
-    df["work_gpci"]     = work_gpci
-    df["pe_gpci"]       = pe_gpci
-    df["mp_gpci"]       = mp_gpci
+    df["work_gpci"] = work_gpci
+    df["pe_gpci"] = pe_gpci
+    df["mp_gpci"] = mp_gpci
 
     return df
 
@@ -226,9 +225,8 @@ def get_locality_rate(
     Returns:
         Locality-adjusted rate in USD, or None if not found.
     """
-    mask = (
-        (df["hcpcs_code"] == cpt_code.strip().upper()) &
-        (df["modifier"].fillna("") == modifier.strip().upper())
+    mask = (df["hcpcs_code"] == cpt_code.strip().upper()) & (
+        df["modifier"].fillna("") == modifier.strip().upper()
     )
     matches = df[mask]
     if matches.empty:
@@ -239,6 +237,7 @@ def get_locality_rate(
 
 
 # ── CLI entrypoint ────────────────────────────────────────────────────────────
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -275,11 +274,12 @@ def main():
     args = parser.parse_args()
 
     try:
-        rvu_df  = pd.read_csv(args.rvu)
+        rvu_df = pd.read_csv(args.rvu)
         gpci_df = load_gpci_file(args.gpci)
 
         result = compute_locality_rates(
-            rvu_df, gpci_df,
+            rvu_df,
+            gpci_df,
             state=args.state,
             locality_number=args.locality,
         )
@@ -289,7 +289,9 @@ def main():
         result.to_csv(output_path, index=False)
 
         logger.info(f"Saved {len(result):,} records to: {output_path}")
-        print(f"\nDone. {len(result):,} locality-adjusted records saved to {output_path}")
+        print(
+            f"\nDone. {len(result):,} locality-adjusted records saved to {output_path}"
+        )
 
     except (FileNotFoundError, ValueError) as e:
         logger.error(str(e))

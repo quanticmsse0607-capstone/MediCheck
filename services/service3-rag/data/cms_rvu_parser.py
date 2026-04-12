@@ -52,17 +52,17 @@ logger = logging.getLogger(__name__)
 # The description field (7:57) is parsed but immediately discarded.
 
 _COLS = [
-    ("hcpcs_code",           0,   5),
-    ("modifier",             5,   7),
+    ("hcpcs_code", 0, 5),
+    ("modifier", 5, 7),
     # Description 7:57 — AMA copyright, never stored
-    ("status_code",         57,  58),
-    ("work_rvu",            59,  65),
-    ("non_facility_pe_rvu", 66,  72),
-    ("facility_pe_rvu",     75,  81),
-    ("malpractice_rvu",     84,  89),
-    ("total_non_facility",  90,  96),
-    ("total_facility",      96, 102),
-    ("conversion_factor",  132, 140),
+    ("status_code", 57, 58),
+    ("work_rvu", 59, 65),
+    ("non_facility_pe_rvu", 66, 72),
+    ("facility_pe_rvu", 75, 81),
+    ("malpractice_rvu", 84, 89),
+    ("total_non_facility", 90, 96),
+    ("total_facility", 96, 102),
+    ("conversion_factor", 132, 140),
 ]
 
 # Only status codes A, R, T have valid RVUs for Medicare payment
@@ -114,10 +114,7 @@ def parse_rvu_file(input_path: str | Path) -> pd.DataFrame:
                 continue
 
             # Extract all columns — description deliberately omitted
-            row = {
-                name: line[start:end].strip()
-                for name, start, end in _COLS
-            }
+            row = {name: line[start:end].strip() for name, start, end in _COLS}
             rows.append(row)
 
     logger.info(
@@ -157,25 +154,25 @@ def parse_rvu_file(input_path: str | Path) -> pd.DataFrame:
         df["total_non_facility"] * df["conversion_factor"]
     ).round(2)
 
-    df["rate_facility"] = (
-        df["total_facility"] * df["conversion_factor"]
-    ).round(2)
+    df["rate_facility"] = (df["total_facility"] * df["conversion_factor"]).round(2)
 
     # ── Final column order ────────────────────────────────────────────────────
-    df = df[[
-        "hcpcs_code",
-        "modifier",
-        "status_code",
-        "work_rvu",
-        "non_facility_pe_rvu",
-        "facility_pe_rvu",
-        "malpractice_rvu",
-        "total_non_facility",
-        "total_facility",
-        "conversion_factor",
-        "rate_non_facility",
-        "rate_facility",
-    ]]
+    df = df[
+        [
+            "hcpcs_code",
+            "modifier",
+            "status_code",
+            "work_rvu",
+            "non_facility_pe_rvu",
+            "facility_pe_rvu",
+            "malpractice_rvu",
+            "total_non_facility",
+            "total_facility",
+            "conversion_factor",
+            "rate_non_facility",
+            "rate_facility",
+        ]
+    ]
 
     logger.info(
         f"Parsed {len(df):,} records. "
@@ -213,9 +210,8 @@ def get_medicare_rate(
     Returns:
         Rate in USD, or None if the code is not found.
     """
-    mask = (
-        (df["hcpcs_code"] == cpt_code.strip().upper()) &
-        (df["modifier"] == modifier.strip().upper())
+    mask = (df["hcpcs_code"] == cpt_code.strip().upper()) & (
+        df["modifier"] == modifier.strip().upper()
     )
     matches = df[mask]
 
@@ -227,6 +223,7 @@ def get_medicare_rate(
 
 
 # ── CLI entrypoint ────────────────────────────────────────────────────────────
+
 
 def main():
     parser = argparse.ArgumentParser(

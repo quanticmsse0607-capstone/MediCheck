@@ -53,7 +53,7 @@ logger = logging.getLogger(__name__)
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
-CHUNK_SIZE    = 500   # tokens (approximate — splitter uses chars internally)
+CHUNK_SIZE = 500  # tokens (approximate — splitter uses chars internally)
 CHUNK_OVERLAP = 50
 EMBEDDING_MODEL = "text-embedding-3-small"
 COLLECTION_NAME = "medicheck_kb"
@@ -61,12 +61,11 @@ COLLECTION_NAME = "medicheck_kb"
 # Map each filename to a clean document title for metadata
 DOCUMENT_TITLES = {
     "icd_10_cm_october_2025_guidelines_0.pdf": "ICD-10-CM Official Guidelines for Coding and Reporting FY2026",
-    "nsa-at-a-glance.pdf":                     "No Surprises Act at a Glance",
-    "nsa-helping-consumers.pdf":               "Helping Consumers Protect Their Rights Under the No Surprises Act",
-    "nsa-keyprotections_1.pdf":                "No Surprises Act: Overview of Key Consumer Protections",
-    "surprise-billing-requirements-final-rules-fact-sheet.pdf":
-                                               "Requirements Related to Surprise Billing: Final Rules Fact Sheet",
-    "RVU26B.pdf":                              "CMS Physician Fee Schedule: File Layout and Rate Calculation Methodology (2026)",
+    "nsa-at-a-glance.pdf": "No Surprises Act at a Glance",
+    "nsa-helping-consumers.pdf": "Helping Consumers Protect Their Rights Under the No Surprises Act",
+    "nsa-keyprotections_1.pdf": "No Surprises Act: Overview of Key Consumer Protections",
+    "surprise-billing-requirements-final-rules-fact-sheet.pdf": "Requirements Related to Surprise Billing: Final Rules Fact Sheet",
+    "RVU26B.pdf": "CMS Physician Fee Schedule: File Layout and Rate Calculation Methodology (2026)",
 }
 
 # ICD-10 heading patterns — used to detect natural section boundaries
@@ -79,6 +78,7 @@ ICD10_HEADING_PATTERNS = [
 
 # ── Loaders ───────────────────────────────────────────────────────────────────
 
+
 def load_pdf(filepath: Path) -> list[Document]:
     """Load a PDF using PyPDFLoader. Returns one Document per page."""
     logger.info(f"  Loading PDF: {filepath.name}")
@@ -87,15 +87,19 @@ def load_pdf(filepath: Path) -> list[Document]:
     # Inject source filename into metadata for traceability
     for page in pages:
         page.metadata["source"] = filepath.name
-        page.metadata["document_title"] = DOCUMENT_TITLES.get(filepath.name, filepath.stem)
+        page.metadata["document_title"] = DOCUMENT_TITLES.get(
+            filepath.name, filepath.stem
+        )
     logger.info(f"    {len(pages)} pages loaded")
     return pages
 
 
 # ── Chunking ──────────────────────────────────────────────────────────────────
 
-def make_splitter(chunk_size: int = CHUNK_SIZE,
-                  chunk_overlap: int = CHUNK_OVERLAP) -> RecursiveCharacterTextSplitter:
+
+def make_splitter(
+    chunk_size: int = CHUNK_SIZE, chunk_overlap: int = CHUNK_OVERLAP
+) -> RecursiveCharacterTextSplitter:
     """
     RecursiveCharacterTextSplitter with separators ordered from coarse to fine.
     Tries to split on double newlines (paragraphs) first, then single newlines,
@@ -105,7 +109,7 @@ def make_splitter(chunk_size: int = CHUNK_SIZE,
     for typical English prose at ~4 chars/token.
     """
     return RecursiveCharacterTextSplitter(
-        chunk_size=chunk_size * 4,      # ~4 chars per token
+        chunk_size=chunk_size * 4,  # ~4 chars per token
         chunk_overlap=chunk_overlap * 4,
         separators=["\n\n", "\n", ". ", " ", ""],
         length_function=len,
@@ -123,8 +127,7 @@ def split_icd10(pages: list[Document]) -> list[Document]:
     produces cleaner retrieval results.
     """
     heading_re = re.compile(
-        r"(Section\s+[IVX]+\.|^[A-Z]\.\s+[A-Z][a-z]|^Chapter\s+\d+)",
-        re.MULTILINE
+        r"(Section\s+[IVX]+\.|^[A-Z]\.\s+[A-Z][a-z]|^Chapter\s+\d+)", re.MULTILINE
     )
 
     splitter = make_splitter()
@@ -145,12 +148,14 @@ def split_icd10(pages: list[Document]) -> list[Document]:
             if current_text.strip():
                 section_chunks = splitter.create_documents(
                     [current_text],
-                    metadatas=[{
-                        "source": page.metadata["source"],
-                        "document_title": page.metadata["document_title"],
-                        "section": current_section,
-                        "page_number": current_page,
-                    }]
+                    metadatas=[
+                        {
+                            "source": page.metadata["source"],
+                            "document_title": page.metadata["document_title"],
+                            "section": current_section,
+                            "page_number": current_page,
+                        }
+                    ],
                 )
                 chunks.extend(section_chunks)
 
@@ -164,12 +169,14 @@ def split_icd10(pages: list[Document]) -> list[Document]:
     if current_text.strip():
         section_chunks = splitter.create_documents(
             [current_text],
-            metadatas=[{
-                "source": pages[0].metadata["source"],
-                "document_title": pages[0].metadata["document_title"],
-                "section": current_section,
-                "page_number": current_page,
-            }]
+            metadatas=[
+                {
+                    "source": pages[0].metadata["source"],
+                    "document_title": pages[0].metadata["document_title"],
+                    "section": current_section,
+                    "page_number": current_page,
+                }
+            ],
         )
         chunks.extend(section_chunks)
 
@@ -188,12 +195,16 @@ def split_standard(docs: list[Document], section_hint: str = "") -> list[Documen
     for doc in docs:
         page_chunks = splitter.create_documents(
             [doc.page_content],
-            metadatas=[{
-                "source": doc.metadata.get("source", ""),
-                "document_title": doc.metadata.get("document_title", ""),
-                "section": section_hint or _infer_section(doc.page_content),
-                "page_number": doc.metadata.get("page", doc.metadata.get("page_number", 1)),
-            }]
+            metadatas=[
+                {
+                    "source": doc.metadata.get("source", ""),
+                    "document_title": doc.metadata.get("document_title", ""),
+                    "section": section_hint or _infer_section(doc.page_content),
+                    "page_number": doc.metadata.get(
+                        "page", doc.metadata.get("page_number", 1)
+                    ),
+                }
+            ],
         )
         chunks.extend(page_chunks)
 
@@ -218,6 +229,7 @@ def _infer_section(text: str) -> str:
 
 # ── Ingestion pipeline ────────────────────────────────────────────────────────
 
+
 def load_and_chunk_all(raw_dir: Path) -> list[Document]:
     """
     Load all source documents from raw_dir and chunk them.
@@ -226,8 +238,7 @@ def load_and_chunk_all(raw_dir: Path) -> list[Document]:
     all_chunks = []
 
     # Define processing order — ICD-10 first (largest, most chunks)
-    pdf_files = [f for f in sorted(raw_dir.glob("*.pdf"))
-                 if f.name in DOCUMENT_TITLES]
+    pdf_files = [f for f in sorted(raw_dir.glob("*.pdf")) if f.name in DOCUMENT_TITLES]
 
     logger.info(f"Found {len(pdf_files)} PDFs to ingest")
 
@@ -345,6 +356,7 @@ def verify_vector_store(vector_store: Chroma) -> None:
 
 
 # ── CLI entrypoint ────────────────────────────────────────────────────────────
+
 
 def main():
     parser = argparse.ArgumentParser(
