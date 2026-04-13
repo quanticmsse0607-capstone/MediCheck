@@ -65,14 +65,24 @@ medicheck/
 │   ├── service1-frontend/              # Service 1 — React + Vite SPA
 │   ├── service2-billanalysis/          # Service 2 — Flask Bill Analysis API
 │   └── service3-rag/                   # Service 3 — Flask RAG & Letter Service
+│       ├── app.py                      # Flask application factory
+│       ├── config.py                   # Environment-based configuration
+│       ├── ingest.py                   # RAG knowledge base ingestion pipeline
+│       ├── rag/
+│       │   └── chain.py               # LangChain LCEL retrieval chain + citation extraction
+│       ├── routes/
+│       │   ├── health.py              # GET /health
+│       │   ├── explain.py             # POST /explain — grounded billing error explanations
+│       │   └── draft_letter.py        # POST /draft-letter — dispute paragraph generation
 │       └── data/
 │           ├── cms_rvu_parser.py       # Parses CMS PPRRVU fixed-width file → medicare_rates.csv
 │           ├── cms_gpci_parser.py      # Applies GPCI locality adjustments → medicare_rates_{state}.csv
-│           ├── raw/                    # All source files committed (PDFs, HTML, .txt, .csv)
-│           └── processed/             # Processed CSVs (committed)
-│               ├── medicare_rates.csv          # National unadjusted Medicare rates
-│               ├── medicare_rates_sc.csv       # South Carolina locality-adjusted rates
-│               └── medicare_rates_nc.csv       # North Carolina locality-adjusted rates
+│           ├── raw/                    # All source files committed (PDFs, .txt, .csv)
+│           ├── processed/             # Processed CSVs (committed)
+│           │   ├── medicare_rates.csv          # National unadjusted Medicare rates
+│           │   ├── medicare_rates_sc.csv       # South Carolina locality-adjusted rates
+│           │   └── medicare_rates_nc.csv       # North Carolina locality-adjusted rates
+│           └── chroma_db/             # ChromaDB vector store (gitignored — rebuild with ingest.py)
 ├── test-data/
 │   ├── generate_test_data.py           # Synthetic document generator
 │   └── synthetic/                      # Generated PDFs (gitignored)
