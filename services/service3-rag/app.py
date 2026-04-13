@@ -29,9 +29,11 @@ def create_app(config_name: str = None) -> Flask:
     # ── Register blueprints ───────────────────────────────────────────────────
     from routes.health import health_bp
     from routes.explain import explain_bp
+    from routes.draft_letter import draft_letter_bp
 
     app.register_blueprint(health_bp)
     app.register_blueprint(explain_bp)
+    app.register_blueprint(draft_letter_bp)
 
     # ── Initialize RAG chain ──────────────────────────────────────────────────
     from rag.chain import init_chain
@@ -47,4 +49,4 @@ def create_app(config_name: str = None) -> Flask:
 app = create_app()
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5001)
+    app.run(debug=True, port=5002)

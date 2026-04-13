@@ -41,9 +41,32 @@ Base your answer only on the provided context. If the context does not address t
 Do not speculate beyond what the context supports."""
 )
 
+LETTER_PROMPT = ChatPromptTemplate.from_template(
+    """You are a medical billing compliance expert drafting a formal dispute paragraph for a patient's billing dispute letter.
+
+Patient: {patient_name}
+Provider: {provider_name}
+Total disputed amount: ${total_savings}
+
+Billing errors identified:
+{error_summary}
+
+Relevant regulatory context:
+{context}
+
+Write a single formal dispute paragraph (3-5 sentences) that:
+- Requests the provider review and correct the identified errors
+- References the applicable regulations from the context above
+- States the total adjustment requested
+- Mentions that escalation to the state insurance commissioner is possible if unresolved within 30 days
+
+Write only the paragraph text. Do not include a salutation, subject line, or closing."""
+)
+
 # Module-level singletons — initialized once by init_chain()
 _retriever = None
 _chain = None
+_letter_chain = None
 
 
 def init_chain(app) -> None:
@@ -51,7 +74,7 @@ def init_chain(app) -> None:
     Initialize the RAG retriever and LCEL chain from Flask app config.
     Must be called once during app startup (from create_app).
     """
-    global _retriever, _chain
+    global _retriever, _chain, _letter_chain
 
     embeddings = OpenAIEmbeddings(
         model=EMBEDDING_MODEL,
@@ -77,6 +100,7 @@ def init_chain(app) -> None:
     )
 
     _chain = EXPLAIN_PROMPT | llm | StrOutputParser()
+    _letter_chain = LETTER_PROMPT | llm | StrOutputParser()
 
     logger.info(
         "RAG chain initialized (model=%s, top_k=%d, db=%s)",
@@ -139,3 +163,50 @@ def explain_detection(detection: dict) -> dict:
         "explanation": explanation,
         "citations": citations,
     }
+
+
+def draft_letter_content(analysis: dict) -> str:
+    """
+    Generate the formal dispute paragraph for the billing dispute letter.
+
+    Retrieves regulatory context from ChromaDB using the detected error types
+    as the query, then generates a grounded dispute paragraph via GPT-4o-mini.
+
+    Args:
+        analysis: dict from Service 2 containing patient_name, provider_name,
+                  date_of_service, errors (list), total_estimated_savings.
+
+    Returns:
+        A single plain-text dispute paragraph string.
+
+    Raises:
+        RuntimeError: If called before init_chain().
+    """
+    if _retriever is None or _letter_chain is None:
+        raise RuntimeError("RAG chain is not initialized. Call init_chain(app) first.")
+
+    errors = analysis.get("errors", [])
+
+    # Build retrieval query from all detected error types
+    error_types = " ".join(e.get("error_type", "") for e in errors)
+    query = f"billing dispute: {error_types}"
+
+    docs = _retriever.invoke(query)
+    context = "\n\n".join(doc.page_content for doc in docs)
+
+    # Summarise errors for the prompt
+    error_lines = []
+    for e in errors:
+        impact = e.get("estimated_dollar_impact", 0.0)
+        error_lines.append(f"- {e.get('error_type', 'Billing Error')}: ${impact:,.2f}")
+    error_summary = "\n".join(error_lines) if error_lines else "- Billing errors detected"
+
+    return _letter_chain.invoke(
+        {
+            "patient_name": analysis.get("patient_name", "[Patient]"),
+            "provider_name": analysis.get("provider_name", "[Provider]"),
+            "total_savings": f"{analysis.get('total_estimated_savings', 0.0):,.2f}",
+            "error_summary": error_summary,
+            "context": context,
+        }
+    )
