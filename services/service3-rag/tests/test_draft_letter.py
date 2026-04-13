@@ -32,21 +32,32 @@ MOCK_LETTER_CONTENT = (
 
 # ── Valid requests ────────────────────────────────────────────────────────────
 
+
 def test_draft_letter_valid_request_returns_200(client):
-    with patch("routes.draft_letter.draft_letter_content", return_value=MOCK_LETTER_CONTENT):
-        response = client.post("/draft-letter", json={
-            "session_id": "test-session-001",
-            "analysis": VALID_ANALYSIS,
-        })
+    with patch(
+        "routes.draft_letter.draft_letter_content", return_value=MOCK_LETTER_CONTENT
+    ):
+        response = client.post(
+            "/draft-letter",
+            json={
+                "session_id": "test-session-001",
+                "analysis": VALID_ANALYSIS,
+            },
+        )
     assert response.status_code == 200
 
 
 def test_draft_letter_response_contains_letter_content(client):
-    with patch("routes.draft_letter.draft_letter_content", return_value=MOCK_LETTER_CONTENT):
-        response = client.post("/draft-letter", json={
-            "session_id": "test-session-001",
-            "analysis": VALID_ANALYSIS,
-        })
+    with patch(
+        "routes.draft_letter.draft_letter_content", return_value=MOCK_LETTER_CONTENT
+    ):
+        response = client.post(
+            "/draft-letter",
+            json={
+                "session_id": "test-session-001",
+                "analysis": VALID_ANALYSIS,
+            },
+        )
     data = response.get_json()
     assert "letter_content" in data
     assert isinstance(data["letter_content"], str)
@@ -55,12 +66,15 @@ def test_draft_letter_response_contains_letter_content(client):
 
 def test_draft_letter_session_id_optional(client):
     """session_id is accepted but not required — Service 2 always sends it."""
-    with patch("routes.draft_letter.draft_letter_content", return_value=MOCK_LETTER_CONTENT):
+    with patch(
+        "routes.draft_letter.draft_letter_content", return_value=MOCK_LETTER_CONTENT
+    ):
         response = client.post("/draft-letter", json={"analysis": VALID_ANALYSIS})
     assert response.status_code == 200
 
 
 # ── Validation errors ─────────────────────────────────────────────────────────
+
 
 def test_draft_letter_missing_analysis_key_returns_400(client):
     response = client.post("/draft-letter", json={"session_id": "test-123"})
@@ -79,15 +93,19 @@ def test_draft_letter_empty_body_returns_400(client):
 
 # ── Error handling ────────────────────────────────────────────────────────────
 
+
 def test_draft_letter_chain_not_initialized_returns_503(client):
     with patch(
         "routes.draft_letter.draft_letter_content",
         side_effect=RuntimeError("not initialized"),
     ):
-        response = client.post("/draft-letter", json={
-            "session_id": "test-123",
-            "analysis": VALID_ANALYSIS,
-        })
+        response = client.post(
+            "/draft-letter",
+            json={
+                "session_id": "test-123",
+                "analysis": VALID_ANALYSIS,
+            },
+        )
     assert response.status_code == 503
 
 
@@ -96,8 +114,11 @@ def test_draft_letter_unexpected_error_returns_500(client):
         "routes.draft_letter.draft_letter_content",
         side_effect=Exception("unexpected"),
     ):
-        response = client.post("/draft-letter", json={
-            "session_id": "test-123",
-            "analysis": VALID_ANALYSIS,
-        })
+        response = client.post(
+            "/draft-letter",
+            json={
+                "session_id": "test-123",
+                "analysis": VALID_ANALYSIS,
+            },
+        )
     assert response.status_code == 500

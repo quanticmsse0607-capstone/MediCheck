@@ -82,7 +82,9 @@ def explain():
             if not error.get(field):
                 return (
                     jsonify(
-                        {"error": f"Error at index {i} is missing required field '{field}'."}
+                        {
+                            "error": f"Error at index {i} is missing required field '{field}'."
+                        }
                     ),
                     400,
                 )

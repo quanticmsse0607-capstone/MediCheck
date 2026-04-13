@@ -150,7 +150,9 @@ def explain_detection(detection: dict) -> dict:
     seen: set[str] = set()
     citations: list[dict] = []
     for doc in docs:
-        source = doc.metadata.get("document_title") or doc.metadata.get("source", "Unknown")
+        source = doc.metadata.get("document_title") or doc.metadata.get(
+            "source", "Unknown"
+        )
         page = doc.metadata.get("page_number", "")
         section = doc.metadata.get("section", "")
         section_label = section or (f"p. {page}" if page else "")
@@ -199,7 +201,9 @@ def draft_letter_content(analysis: dict) -> str:
     for e in errors:
         impact = e.get("estimated_dollar_impact", 0.0)
         error_lines.append(f"- {e.get('error_type', 'Billing Error')}: ${impact:,.2f}")
-    error_summary = "\n".join(error_lines) if error_lines else "- Billing errors detected"
+    error_summary = (
+        "\n".join(error_lines) if error_lines else "- Billing errors detected"
+    )
 
     return _letter_chain.invoke(
         {

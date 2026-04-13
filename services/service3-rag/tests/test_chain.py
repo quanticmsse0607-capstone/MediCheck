@@ -16,6 +16,7 @@ from langchain.schema import Document
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _make_doc(title, section, page):
     """Create a mock Document with controlled metadata."""
     doc = MagicMock(spec=Document)
@@ -31,12 +32,14 @@ def _make_doc(title, section, page):
 def _reset_chain_singletons():
     """Reset module-level singletons between tests."""
     import rag.chain as chain_module
+
     chain_module._retriever = None
     chain_module._chain = None
     chain_module._letter_chain = None
 
 
 # ── explain_detection() ───────────────────────────────────────────────────────
+
 
 class TestExplainDetection:
 
@@ -45,21 +48,21 @@ class TestExplainDetection:
 
     def test_raises_when_not_initialized(self):
         from rag.chain import explain_detection
+
         with pytest.raises(RuntimeError, match="not initialized"):
             explain_detection({"error_type": "Duplicate Charge", "description": "test"})
 
     def test_returns_explanation_and_citations(self):
         import rag.chain as chain_module
 
-        mock_doc = _make_doc(
-            "No Surprises Act at a Glance", "Key Protections", 2
-        )
+        mock_doc = _make_doc("No Surprises Act at a Glance", "Key Protections", 2)
         chain_module._retriever = MagicMock()
         chain_module._retriever.invoke.return_value = [mock_doc]
         chain_module._chain = MagicMock()
         chain_module._chain.invoke.return_value = "This is a plain-English explanation."
 
         from rag.chain import explain_detection
+
         detection = {
             "error_id": "err_001",
             "module": "no_surprises_act",
@@ -84,10 +87,13 @@ class TestExplainDetection:
         chain_module._chain.invoke.return_value = "Explanation text."
 
         from rag.chain import explain_detection
-        result = explain_detection({
-            "error_type": "Coding Error",
-            "description": "Wrong ICD-10 code used.",
-        })
+
+        result = explain_detection(
+            {
+                "error_type": "Coding Error",
+                "description": "Wrong ICD-10 code used.",
+            }
+        )
 
         assert result["citations"][0]["section"] == "p. 5"
 
@@ -105,6 +111,7 @@ class TestExplainDetection:
         chain_module._chain.invoke.return_value = "Explanation."
 
         from rag.chain import explain_detection
+
         result = explain_detection({"error_type": "Test", "description": "Test"})
 
         assert len(result["citations"]) == 1
@@ -118,6 +125,7 @@ class TestExplainDetection:
         chain_module._chain.invoke.return_value = "Explanation with no context."
 
         from rag.chain import explain_detection
+
         result = explain_detection({"error_type": "Test", "description": "Test"})
 
         assert result["citations"] == []
@@ -131,6 +139,7 @@ class TestExplainDetection:
         chain_module._chain.invoke.return_value = "Explanation."
 
         from rag.chain import explain_detection
+
         detection = {
             "error_id": "err_001",
             "module": "duplicate_charge",
@@ -148,6 +157,7 @@ class TestExplainDetection:
 
 # ── draft_letter_content() ────────────────────────────────────────────────────
 
+
 class TestDraftLetterContent:
 
     def setup_method(self):
@@ -155,6 +165,7 @@ class TestDraftLetterContent:
 
     def test_raises_when_not_initialized(self):
         from rag.chain import draft_letter_content
+
         with pytest.raises(RuntimeError, match="not initialized"):
             draft_letter_content({"patient_name": "Jane"})
 
@@ -164,17 +175,22 @@ class TestDraftLetterContent:
         chain_module._retriever = MagicMock()
         chain_module._retriever.invoke.return_value = []
         chain_module._letter_chain = MagicMock()
-        chain_module._letter_chain.invoke.return_value = "I respectfully request a review."
+        chain_module._letter_chain.invoke.return_value = (
+            "I respectfully request a review."
+        )
 
         from rag.chain import draft_letter_content
-        result = draft_letter_content({
-            "patient_name": "James Whitfield",
-            "provider_name": "Atrium Health",
-            "total_estimated_savings": 747.0,
-            "errors": [
-                {"error_type": "Duplicate Charge", "estimated_dollar_impact": 480.0}
-            ],
-        })
+
+        result = draft_letter_content(
+            {
+                "patient_name": "James Whitfield",
+                "provider_name": "Atrium Health",
+                "total_estimated_savings": 747.0,
+                "errors": [
+                    {"error_type": "Duplicate Charge", "estimated_dollar_impact": 480.0}
+                ],
+            }
+        )
 
         assert isinstance(result, str)
         assert len(result) > 0
@@ -188,11 +204,14 @@ class TestDraftLetterContent:
         chain_module._letter_chain.invoke.return_value = "Dispute paragraph."
 
         from rag.chain import draft_letter_content
-        result = draft_letter_content({
-            "patient_name": "Jane",
-            "provider_name": "Provider",
-            "total_estimated_savings": 0.0,
-            "errors": [],
-        })
+
+        result = draft_letter_content(
+            {
+                "patient_name": "Jane",
+                "provider_name": "Provider",
+                "total_estimated_savings": 0.0,
+                "errors": [],
+            }
+        )
 
         assert isinstance(result, str)
