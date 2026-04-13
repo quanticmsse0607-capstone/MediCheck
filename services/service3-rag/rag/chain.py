@@ -121,16 +121,18 @@ def explain_detection(detection: dict) -> dict:
         }
     )
 
-    # Build deduplicated citations from chunk metadata: "Title, p. N"
+    # Build deduplicated citations as objects matching the API contract:
+    # { "source": document_title, "section": section/page, "url": null }
     seen: set[str] = set()
-    citations: list[str] = []
+    citations: list[dict] = []
     for doc in docs:
-        title = doc.metadata.get("document_title") or doc.metadata.get("source", "Unknown")
+        source = doc.metadata.get("document_title") or doc.metadata.get("source", "Unknown")
         page = doc.metadata.get("page_number", "")
-        citation = f"{title}, p. {page}" if page else title
-        if citation not in seen:
-            seen.add(citation)
-            citations.append(citation)
+        section = doc.metadata.get("section", "")
+        section_label = section or (f"p. {page}" if page else "")
+        if source not in seen:
+            seen.add(source)
+            citations.append({"source": source, "section": section_label, "url": None})
 
     return {
         **detection,
