@@ -11,7 +11,7 @@ class Config:
     OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
 
     # ChromaDB — vector store for RAG knowledge base
-    CHROMA_PERSIST_PATH = os.environ.get("CHROMA_PERSIST_PATH", "./chroma_db")
+    CHROMA_PERSIST_PATH = os.environ.get("CHROMA_PERSIST_PATH", "./data/chroma_db")
 
     # CORS — origins allowed to call this service
     # In production this should be the Render URL of Service 2

@@ -28,8 +28,15 @@ def create_app(config_name: str = None) -> Flask:
 
     # ── Register blueprints ───────────────────────────────────────────────────
     from routes.health import health_bp
+    from routes.explain import explain_bp
 
     app.register_blueprint(health_bp)
+    app.register_blueprint(explain_bp)
+
+    # ── Initialize RAG chain ──────────────────────────────────────────────────
+    from rag.chain import init_chain
+
+    init_chain(app)
 
     return app
 
