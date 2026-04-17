@@ -85,6 +85,16 @@ def test_explain_empty_errors_returns_empty_dict(client):
     assert response.get_json()["explanations"] == {}
 
 
+def test_explain_session_id_echoed_in_response(client):
+    mock_result = {**VALID_ERROR, **MOCK_EXPLANATION}
+    with patch("routes.explain.explain_detection", return_value=mock_result):
+        response = client.post(
+            "/explain",
+            json={"session_id": "test-session-abc", "errors": [VALID_ERROR]},
+        )
+    assert response.get_json()["session_id"] == "test-session-abc"
+
+
 def test_explain_session_id_optional(client):
     """session_id is accepted but not required — Service 2 always sends it."""
     mock_result = {**VALID_ERROR, **MOCK_EXPLANATION}

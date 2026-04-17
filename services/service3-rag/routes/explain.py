@@ -67,6 +67,8 @@ def explain():
     if not body or "errors" not in body:
         return jsonify({"error": "Request body must include an 'errors' list."}), 400
 
+    session_id = body.get("session_id")
+
     errors = body["errors"]
     if not isinstance(errors, list):
         return jsonify({"error": "'errors' must be a list."}), 400
@@ -110,4 +112,4 @@ def explain():
             "citations": result["citations"],
         }
 
-    return jsonify({"explanations": explanations}), 200
+    return jsonify({"session_id": session_id, "explanations": explanations}), 200
