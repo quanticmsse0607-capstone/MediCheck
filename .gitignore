@@ -230,3 +230,6 @@ Thumbs.db
 
 # ── Editor settings ───────────────────────────────────────────────────────────
 .vscode/
+
+# Temporary Scope documents
+claude.md
