@@ -181,10 +181,14 @@ function ErrorCard({ error }) {
             <div className="flex flex-col gap-2">
               <p className="text-sm text-gray-700">{error.explanation}</p>
               {error.citations?.map((c, i) => (
-                <a key={i} href={c.url} target="_blank" rel="noopener noreferrer"
-                  className="text-xs text-blue-600 hover:underline">
-                  📄 {c.source} — {c.section}
-                </a>
+                c.url
+                  ? <a key={i} href={c.url} target="_blank" rel="noopener noreferrer"
+                      className="text-xs text-blue-600 hover:underline">
+                      📄 {c.source}{c.section ? ` — ${c.section}` : ''}
+                    </a>
+                  : <span key={i} className="text-xs text-gray-500">
+                      📄 {c.source}{c.section ? ` — ${c.section}` : ''}
+                    </span>
               ))}
             </div>
           )}
