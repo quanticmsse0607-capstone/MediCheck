@@ -64,6 +64,17 @@ def test_draft_letter_response_contains_letter_content(client):
     assert len(data["letter_content"]) > 0
 
 
+def test_draft_letter_session_id_echoed_in_response(client):
+    with patch(
+        "routes.draft_letter.draft_letter_content", return_value=MOCK_LETTER_CONTENT
+    ):
+        response = client.post(
+            "/draft-letter",
+            json={"session_id": "test-session-abc", "analysis": VALID_ANALYSIS},
+        )
+    assert response.get_json()["session_id"] == "test-session-abc"
+
+
 def test_draft_letter_session_id_optional(client):
     """session_id is accepted but not required — Service 2 always sends it."""
     with patch(

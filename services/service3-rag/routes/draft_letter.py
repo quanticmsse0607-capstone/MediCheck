@@ -53,6 +53,7 @@ def draft_letter():
     if not body or "analysis" not in body:
         return jsonify({"error": "Request body must include 'analysis'."}), 400
 
+    session_id = body.get("session_id")
     analysis = body["analysis"]
 
     if not isinstance(analysis, dict):
@@ -67,4 +68,4 @@ def draft_letter():
         logger.exception("RAG chain error in /draft-letter")
         return jsonify({"error": "RAG chain error.", "detail": str(exc)}), 500
 
-    return jsonify({"letter_content": content}), 200
+    return jsonify({"session_id": session_id, "letter_content": content}), 200
