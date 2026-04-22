@@ -182,6 +182,44 @@ def download_file(session_id: str, filename: str):
     )
 
 
+# Add the report endpoint
+@letter_bp.get("/report/<session_id>")
+def get_report(session_id):
+    """
+    GET /report/<session_id>
+    Returns analysis results + download URLs if letter already generated.
+    FR-23: both formats retrievable without repeating analysis.
+    """
+    session = Session.query.get(session_id)
+    if not session:
+        return _error(404, ERR_SESSION_NOT_FOUND, "No session found.", session_id)
+
+    results = AnalysisResult.query.filter_by(session_id=session_id).all()
+    letter = DisputeLetter.query.filter_by(session_id=session_id).first()
+
+    extracted = ExtractedField.query.filter_by(session_id=session_id).first()
+    total_savings = sum(float(r.estimated_dollar_impact or 0) for r in results)
+
+    response = {
+        "session_id": session_id,
+        "status": session.status,
+        "total_errors": len(results),
+        "total_estimated_savings": total_savings,
+        "all_clear": len(results) == 0,
+        "rag_available": True,
+        "errors": [r.to_dict() for r in results],
+    }
+
+    if letter and os.path.exists(letter.docx_path or ""):
+        base = current_app.config.get("SERVICE2_BASE_URL", "http://localhost:5001")
+        response["downloads"] = {
+            "docx": f"{base}/download/{session_id}/letter.docx",
+            "pdf": f"{base}/download/{session_id}/letter.pdf",
+        }
+
+    return jsonify(response), 200
+
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 

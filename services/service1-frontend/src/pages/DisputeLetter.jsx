@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { getReport, ApiError } from '../api/medicheck'
+import { generateLetter, ApiError } from '../api/medicheck'
 
 /**
  * DisputeLetter — Screen 4
@@ -18,9 +18,15 @@ export default function DisputeLetter() {
   const [downloads, setDownloads] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  // Add this helper function at the top of the component
+  const proxyUrl = (url) => {
+    if (!url) return '#'
+    // Replace the full base URL with /api so Vite proxy handles it
+    return url.replace(/^https?:\/\/[^/]+/, '/api')
+  }
 
   useEffect(() => {
-    getReport(sessionId)
+    generateLetter(sessionId)
       .then((data) => {
         if (data.downloads) setDownloads(data.downloads)
         else setError('Dispute letter not yet available. Please generate it from the error report.')
@@ -73,7 +79,7 @@ export default function DisputeLetter() {
         {/* Download buttons — CSS Grid, two equal columns — FR-21, FR-23 */}
         <div className="grid grid-cols-2 gap-4 mb-8">
           <a
-            href={downloads?.docx}
+            href={proxyUrl(downloads?.docx)}
             download
             className="flex flex-col items-center justify-center bg-blue-700
                        hover:bg-blue-600 text-white font-semibold py-5 px-4
@@ -85,7 +91,7 @@ export default function DisputeLetter() {
           </a>
 
           <a
-            href={downloads?.pdf}
+            href={proxyUrl(downloads?.pdf)}
             download
             className="flex flex-col items-center justify-center bg-white
                        border-2 border-blue-700 text-blue-700 hover:bg-blue-50
