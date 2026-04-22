@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { analyseSession, generateLetter, ApiError } from '../api/medicheck'
+import { analyseSession, generateLetter, getReport, ApiError } from '../api/medicheck'
 
 /**
  * ErrorReport — Screen 3
@@ -28,8 +28,14 @@ export default function ErrorReport() {
   const [generatingLetter, setGeneratingLetter] = useState(false)
 
   useEffect(() => {
-    analyseSession(sessionId)
-      .then(setResults)
+    getReport(sessionId)
+      .then((data) => {
+        if (data.status === 'analysed' || data.status === 'letter_generated') {
+          setResults(data)
+        } else {
+          return analyseSession(sessionId).then(setResults)
+        }
+      })
       .catch((err) => setError(err instanceof ApiError ? err.message : 'Analysis failed.'))
       .finally(() => setLoading(false))
   }, [sessionId])
