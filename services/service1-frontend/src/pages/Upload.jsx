@@ -54,6 +54,17 @@ export default function Upload() {
           </p>
         </div>
 
+        {/* Pilot notice */}
+        <div className="flex items-start gap-2 bg-blue-50 border border-blue-200
+                        rounded-lg px-4 py-3 mb-6 text-sm text-blue-800">
+          <span className="mt-0.5">ℹ️</span>
+          <span>
+            <span className="font-semibold">Pilot programme — South &amp; North Carolina.</span>{' '}
+            MediCheck currently supports bills from providers in South Carolina and North Carolina.
+            Medicare rate benchmarks and No Surprises Act locality data are scoped to these states.
+          </span>
+        </div>
+
         {/* Upload zones — Flexbox column with gap */}
         <div className="flex flex-col gap-4 mb-6">
           <UploadZone
