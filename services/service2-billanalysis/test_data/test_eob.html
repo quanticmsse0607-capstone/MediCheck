@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Explanation of Benefits — BCBS SC</title>
+  <style>
+    body { font-family: Arial, sans-serif; font-size: 11pt; margin: 40px; color: #000; }
+    h1 { font-size: 16pt; margin-bottom: 2px; }
+    h2 { font-size: 12pt; color: #555; margin-top: 0; }
+    .header { display: flex; justify-content: space-between; border-bottom: 2px solid #003366; padding-bottom: 10px; margin-bottom: 16px; }
+    .header-left h1 { margin: 0; color: #003366; }
+    .header-right { text-align: right; font-size: 10pt; color: #333; }
+    .section { margin-bottom: 14px; }
+    .kv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 20px; }
+    .kv { display: flex; gap: 6px; }
+    .kv label { font-weight: bold; white-space: nowrap; }
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    th { background: #003366; color: #fff; padding: 7px 8px; text-align: left; font-size: 10pt; }
+    td { padding: 6px 8px; border-bottom: 1px solid #ddd; font-size: 10pt; }
+    tr:nth-child(even) td { background: #f4f4f4; }
+    .total-row td { font-weight: bold; border-top: 2px solid #000; background: #eef; }
+    .notice { background: #fff8e1; border-left: 4px solid #f9a825; padding: 8px 12px; font-size: 10pt; margin-top: 12px; }
+    .footer { margin-top: 24px; font-size: 9pt; color: #555; border-top: 1px solid #ccc; padding-top: 8px; }
+    @media print { body { margin: 20px; } }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="header-left">
+      <h1>BLUE CROSS BLUE SHIELD OF SOUTH CAROLINA</h1>
+      <h2>Explanation of Benefits (EOB)</h2>
+      <div>I-20 at Alpine Road, Columbia, SC 29219</div>
+      <div>Member Services: 1-800-288-2227</div>
+    </div>
+    <div class="header-right">
+      <div><strong>EOB Date:</strong> 01/20/2025</div>
+      <div><strong>Claim Number:</strong> CLM-2025-88410</div>
+      <div><strong>Plan Type:</strong> PPO</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="kv-grid">
+      <div class="kv"><label>Patient Name:</label> Smith, Jane M.</div>
+      <div class="kv"><label>Date of Birth:</label> 03/15/1975</div>
+      <div class="kv"><label>Date of Service:</label> 01/08/2025</div>
+      <div class="kv"><label>Provider Name:</label> Atrium Health Carolinas Medical Center</div>
+      <div class="kv"><label>Policy Number:</label> BCB987654321</div>
+      <div class="kv"><label>Group Number:</label> GRP-44821</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <strong>CLAIM DETAIL</strong>
+    <table>
+      <thead>
+        <tr>
+          <th>Line</th>
+          <th>CPT Code</th>
+          <th>Service Description</th>
+          <th>Date</th>
+          <th>Qty</th>
+          <th>Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>1</td>
+          <td>99214</td>
+          <td>Office/Outpatient Visit, Established Patient</td>
+          <td>01/08/2025</td>
+          <td>1</td>
+          <td>$480.00</td>
+        </tr>
+        <tr>
+          <td>2</td>
+          <td>72193</td>
+          <td>CT Pelvis Without Contrast</td>
+          <td>01/08/2025</td>
+          <td>1</td>
+          <td>$180.00</td>
+        </tr>
+        <tr class="total-row">
+          <td colspan="5">TOTAL</td>
+          <td>$660.00</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="notice">
+    <strong>Note:</strong> CPT 99213 (Office/Outpatient Visit, Low Complexity) was not included in this
+    EOB because it was not received in this claim submission. If you believe this is an error, please
+    contact Member Services or request a claim review within 180 days.
+  </div>
+
+  <div class="section" style="margin-top:16px;">
+    <div class="kv"><label>Total Billed by Provider:</label> $1,070.00</div>
+    <div class="kv"><label>Total Processed by BCBS SC:</label> $660.00</div>
+    <div class="kv"><label>Discrepancy:</label> $410.00 — see notice above</div>
+  </div>
+
+  <div class="footer">
+    This is not a bill. For questions, call BCBS SC Member Services at 1-800-288-2227.
+    If you disagree with this determination, you have the right to appeal within 180 days of this notice.
+    BCBS SC is an independent licensee of the Blue Cross and Blue Shield Association.
+  </div>
+
+</body>
+</html>

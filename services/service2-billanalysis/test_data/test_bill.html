@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Provider Bill — Atrium Health</title>
+  <style>
+    body { font-family: Arial, sans-serif; font-size: 11pt; margin: 40px; color: #000; }
+    h1 { font-size: 16pt; margin-bottom: 2px; }
+    h2 { font-size: 12pt; color: #555; margin-top: 0; }
+    .header { display: flex; justify-content: space-between; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 16px; }
+    .header-left h1 { margin: 0; }
+    .header-right { text-align: right; font-size: 10pt; color: #333; }
+    .section { margin-bottom: 14px; }
+    .kv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 20px; }
+    .kv { display: flex; gap: 6px; }
+    .kv label { font-weight: bold; white-space: nowrap; }
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    th { background: #003366; color: #fff; padding: 7px 8px; text-align: left; font-size: 10pt; }
+    td { padding: 6px 8px; border-bottom: 1px solid #ddd; font-size: 10pt; }
+    tr:nth-child(even) td { background: #f4f4f4; }
+    .total-row td { font-weight: bold; border-top: 2px solid #000; background: #eef; }
+    .footer { margin-top: 24px; font-size: 9pt; color: #555; border-top: 1px solid #ccc; padding-top: 8px; }
+    @media print { body { margin: 20px; } }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="header-left">
+      <h1>ATRIUM HEALTH CAROLINAS MEDICAL CENTER</h1>
+      <h2>Patient Account Statement</h2>
+      <div>1000 Blythe Blvd, Charlotte, NC 28203</div>
+      <div>Tel: (704) 355-2000 &nbsp;|&nbsp; NPI: 1234567890</div>
+    </div>
+    <div class="header-right">
+      <div><strong>Statement Date:</strong> 01/22/2025</div>
+      <div><strong>Account Number:</strong> ATR-2025-00884</div>
+      <div><strong>Statement Type:</strong> ITEMIZED BILL</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="kv-grid">
+      <div class="kv"><label>Patient Name:</label> Smith, Jane M.</div>
+      <div class="kv"><label>Date of Birth:</label> 03/15/1975</div>
+      <div class="kv"><label>Date of Service:</label> 01/08/2025</div>
+      <div class="kv"><label>Provider:</label> Dr. Robert Ellison, MD</div>
+      <div class="kv"><label>Insurance:</label> Blue Cross Blue Shield of South Carolina</div>
+      <div class="kv"><label>Plan Type:</label> PPO</div>
+      <div class="kv"><label>Policy Number:</label> BCB987654321</div>
+      <div class="kv"><label>Group Number:</label> GRP-44821</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <strong>SERVICE DETAIL</strong>
+    <table>
+      <thead>
+        <tr>
+          <th>Line</th>
+          <th>CPT Code</th>
+          <th>Service Description</th>
+          <th>Date</th>
+          <th>Qty</th>
+          <th>Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>1</td>
+          <td>99214</td>
+          <td>Office/Outpatient Visit, Established Patient — Moderate Complexity</td>
+          <td>01/08/2025</td>
+          <td>1</td>
+          <td>$600.00</td>
+        </tr>
+        <tr>
+          <td>2</td>
+          <td>99213</td>
+          <td>Office/Outpatient Visit, Established Patient — Low Complexity</td>
+          <td>01/08/2025</td>
+          <td>1</td>
+          <td>$290.00</td>
+        </tr>
+        <tr>
+          <td>3</td>
+          <td>72193</td>
+          <td>CT Pelvis Without Contrast</td>
+          <td>01/08/2025</td>
+          <td>1</td>
+          <td>$180.00</td>
+        </tr>
+        <tr class="total-row">
+          <td colspan="5">TOTAL BILLED</td>
+          <td>$1,070.00</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="section">
+    <div class="kv"><label>Amount Due from Patient:</label> See your Explanation of Benefits (EOB) for your share.</div>
+  </div>
+
+  <div class="footer">
+    Questions about your bill? Call Patient Financial Services at (704) 355-9000, Mon–Fri 8am–5pm.
+    This statement is for informational purposes. Please refer to your insurance EOB for coverage details.
+  </div>
+
+</body>
+</html>
