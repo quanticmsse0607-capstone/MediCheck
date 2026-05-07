@@ -55,10 +55,10 @@ CSV_HEADERS = [
     "status_code",
     "explanation",
     "citations",
-    "groundedness_score",   # 0-100, auto-filled by LLM judge
-    "judge_reason",         # LLM judge's one-sentence reasoning
-    "citation_accurate",    # yes / no / partial — fill in manually
-    "notes",                # manual
+    "groundedness_score",  # 0-100, auto-filled by LLM judge
+    "judge_reason",  # LLM judge's one-sentence reasoning
+    "citation_accurate",  # yes / no / partial — fill in manually
+    "notes",  # manual
 ]
 
 # LLM-as-judge prompt — evaluates whether the explanation's factual claims
@@ -205,7 +205,7 @@ def compute_summary(threshold: int) -> None:
         print(f"  p50 : {p50} ms")
         print(f"  p95 : {p95} ms")
 
-    scored = [r for r in rows if r.get("groundedness_score", "").strip() not in ("", )]
+    scored = [r for r in rows if r.get("groundedness_score", "").strip() not in ("",)]
     if scored:
         scores = [int(r["groundedness_score"]) for r in scored]
         grounded = [s for s in scores if s >= threshold]
@@ -214,19 +214,33 @@ def compute_summary(threshold: int) -> None:
         print(f"  Grounded   : {len(grounded)}/{len(scored)} = {pct:.0f}%")
         print(f"  Mean score : {statistics.mean(scores):.0f}/100")
     else:
-        print("\nGroundedness: no scores in CSV — run without --no-judge to generate them.")
+        print(
+            "\nGroundedness: no scores in CSV — run without --no-judge to generate them."
+        )
 
-    filled = [r for r in rows if r.get("citation_accurate", "").strip().lower() in ("yes", "no", "partial")]
+    filled = [
+        r
+        for r in rows
+        if r.get("citation_accurate", "").strip().lower() in ("yes", "no", "partial")
+    ]
     if filled:
-        accurate = [r for r in filled if r["citation_accurate"].strip().lower() in ("yes", "partial")]
+        accurate = [
+            r
+            for r in filled
+            if r["citation_accurate"].strip().lower() in ("yes", "partial")
+        ]
         pct = len(accurate) / len(filled) * 100
         print(f"\nCitation Accuracy ({len(filled)}/{total} rows filled):")
         print(f"  Accurate (yes/partial) : {len(accurate)}/{len(filled)} = {pct:.0f}%")
         if len(filled) < total:
             print(f"  ({total - len(filled)} rows still blank)")
     else:
-        print(f"\nCitation Accuracy: not yet filled — open eval_results.csv and complete the citation_accurate column.")
-        print("  Values: yes = citation points to a directly relevant passage; partial = tangentially relevant; no = incorrect.")
+        print(
+            f"\nCitation Accuracy: not yet filled — open eval_results.csv and complete the citation_accurate column."
+        )
+        print(
+            "  Values: yes = citation points to a directly relevant passage; partial = tangentially relevant; no = incorrect."
+        )
 
 
 def load_existing_results() -> dict:
@@ -237,7 +251,9 @@ def load_existing_results() -> dict:
         return {row["case_id"]: row for row in csv.DictReader(f)}
 
 
-def main(base_url: str, run_judge: bool, threshold: int, case_filter: set | None = None) -> None:
+def main(
+    base_url: str, run_judge: bool, threshold: int, case_filter: set | None = None
+) -> None:
     all_cases = load_eval_set()
     cases = [c for c in all_cases if case_filter is None or c["case_id"] in case_filter]
 
@@ -251,7 +267,11 @@ def main(base_url: str, run_judge: bool, threshold: int, case_filter: set | None
     latencies = []
 
     for i, case in enumerate(cases, 1):
-        print(f"[{i:02d}/{len(cases)}] {case['case_id']} ({case['module']})... ", end="", flush=True)
+        print(
+            f"[{i:02d}/{len(cases)}] {case['case_id']} ({case['module']})... ",
+            end="",
+            flush=True,
+        )
         row = run_case(case, base_url)
         results.append(row)
 
@@ -305,7 +325,9 @@ def main(base_url: str, run_judge: bool, threshold: int, case_filter: set | None
             print(f"  Min      : {min(scores)}")
             print(f"  Max      : {max(scores)}")
 
-    print("\nNext: open eval_results.csv, fill in citation_accurate (yes/no/partial) and notes columns.")
+    print(
+        "\nNext: open eval_results.csv, fill in citation_accurate (yes/no/partial) and notes columns."
+    )
     print("Then run:  python tests/eval_rag.py --summary")
 
 
@@ -343,4 +365,9 @@ if __name__ == "__main__":
         compute_summary(args.threshold)
     else:
         case_filter = set(args.cases.split(",")) if args.cases else None
-        main(args.url, run_judge=not args.no_judge, threshold=args.threshold, case_filter=case_filter)
+        main(
+            args.url,
+            run_judge=not args.no_judge,
+            threshold=args.threshold,
+            case_filter=case_filter,
+        )
