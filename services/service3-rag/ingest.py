@@ -30,9 +30,12 @@ Requirements:
 
 import argparse
 import logging
+import math
 import os
 import re
+import shutil
 import sys
+import time
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -68,13 +71,6 @@ DOCUMENT_TITLES = {
     "RVU26B.pdf": "CMS Physician Fee Schedule: File Layout and Rate Calculation Methodology (2026)",
     "01-chapter1-ncci-medicare-policy-manual-2026-final.pdf": "CMS NCCI Chapter 1 — General Correct Coding Policies",
 }
-
-# ICD-10 heading patterns — used to detect natural section boundaries
-ICD10_HEADING_PATTERNS = [
-    r"^Section\s+[IVX]+\.",
-    r"^[A-Z]\.\s+[A-Z]",
-    r"^Chapter\s+\d+",
-]
 
 
 # ── Loaders ───────────────────────────────────────────────────────────────────
@@ -218,7 +214,7 @@ def _infer_section(text: str) -> str:
     Used for NSA documents where headings appear inline in the text.
     Falls back to empty string if no clear heading is found.
     """
-    lines = [l.strip() for l in text.splitlines() if len(l.strip()) > 10]
+    lines = [line.strip() for line in text.splitlines() if len(line.strip()) > 10]
     if not lines:
         return ""
     first = lines[0]
@@ -285,10 +281,6 @@ def build_vector_store(
     Returns:
         Populated Chroma vector store
     """
-    import math
-    import time
-    import shutil
-
     if reset and db_path.exists():
         shutil.rmtree(db_path)
         logger.info(f"Wiped existing vector store at {db_path}")
