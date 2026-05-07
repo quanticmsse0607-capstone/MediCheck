@@ -66,6 +66,7 @@ DOCUMENT_TITLES = {
     "nsa-keyprotections_1.pdf": "No Surprises Act: Overview of Key Consumer Protections",
     "surprise-billing-requirements-final-rules-fact-sheet.pdf": "Requirements Related to Surprise Billing: Final Rules Fact Sheet",
     "RVU26B.pdf": "CMS Physician Fee Schedule: File Layout and Rate Calculation Methodology (2026)",
+    "01-chapter1-ncci-medicare-policy-manual-2026-final.pdf": "CMS NCCI Chapter 1 — General Correct Coding Policies",
 }
 
 # ICD-10 heading patterns — used to detect natural section boundaries

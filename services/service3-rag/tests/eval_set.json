@@ -1,0 +1,480 @@
+{
+  "_notes": {
+    "purpose": "RAG evaluation set for Step 8 (Sprint 5). 16 cases across 4 modules, 4 per module.",
+    "how_to_use": "Run eval_rag.py to send payloads to POST /explain and collect responses. Score groundedness and citation accuracy manually using the gold_answer fields.",
+    "groundedness_scoring": "For each factual claim in the system response, verify the claim appears in the retrieved context chunks. Score = (supported claims / total claims) * 100.",
+    "citation_accuracy_scoring": "For each citation returned, verify the named source document actually contains content relevant to the error. Score = (accurate citations / total citations) * 100.",
+    "latency": "eval_rag.py records wall-clock time per call. Report p50 and p95 from the latency_ms column in eval_results.csv.",
+    "module2_scoring_note": "Module 2 (Medicare Rate Outlier) uses anti-hallucination scoring, not content-claim scoring. Reason: the two knowledge base sources for this module are PPRRVU2026 (raw rate numbers — not embedded in ChromaDB, lookup data only) and RVU26B.pdf (CMS field layout document — embedded, but contains technical column descriptions with no patient-facing narrative). There is no verifiable prose in the knowledge base to check must_mention claims against. Instead, Module 2 groundedness is scored by checking what the system must NOT say (hallucinated rate figures, fabricated regulation names, invented dollar thresholds beyond what was in the payload). Citation accuracy is scored by confirming the cited source is RVU26B or a CMS document — not a fabricated reference.",
+    "payload_format_note": "All payload descriptions match the actual output format of Shifali's Service 2 detectors (verified 2026-04-28). CPT descriptions are intentionally absent — AMA copyright applies. estimated_dollar_impact for Module 2 = billed - medicare_rate (detector formula). estimated_dollar_impact for EOB Date Mismatch = 0.0 (detector hardcodes this). eval_016 uses a hospitalist case — the original consent waiver scenario was removed because the NoSurprisesActDetector skips elective OON cases (US-011 AC5) and would never generate that payload."
+  },
+  "evaluation_cases": [
+    {
+      "case_id": "eval_001",
+      "module": "duplicate_charge",
+      "description": "Classic duplicate — same CPT code billed twice on same date, identical amounts",
+      "payload": {
+        "session_id": "eval-session-001",
+        "errors": [
+          {
+            "error_id": "err_001",
+            "module": "duplicate_charge",
+            "error_type": "Duplicate Charge",
+            "description": "CPT 99213 appears 2 time(s) on 2024-03-15. Line items 1 and 3 bill the same procedure on the same date. Duplicate billing for a single encounter is not permitted.",
+            "line_items_affected": [1, 3],
+            "estimated_dollar_impact": 150.00,
+            "confidence": "high"
+          }
+        ]
+      },
+      "gold_answer": {
+        "must_mention": [
+          "Billing the same procedure code twice on the same date is not permitted",
+          "Patient should only be billed once for a single service encounter",
+          "One of the duplicate charges should be removed or refunded"
+        ],
+        "expected_sources_contain": ["ICD-10-CM", "CMS", "coding"],
+        "acceptable_if_context_insufficient": true,
+        "notes": "Knowledge base may have limited content on duplicate billing specifically. Acceptable response: system states context does not directly address duplicate charges. Unacceptable: fabricated regulatory citations."
+      }
+    },
+    {
+      "case_id": "eval_002",
+      "module": "duplicate_charge",
+      "description": "Duplicate — same CPT, same date, two line items",
+      "payload": {
+        "session_id": "eval-session-002",
+        "errors": [
+          {
+            "error_id": "err_002",
+            "module": "duplicate_charge",
+            "error_type": "Duplicate Charge",
+            "description": "CPT 93000 appears 2 time(s) on 2024-04-02. Line items 2 and 5 bill the same procedure on the same date. Duplicate billing for a single encounter is not permitted.",
+            "line_items_affected": [2, 5],
+            "estimated_dollar_impact": 85.00,
+            "confidence": "high"
+          }
+        ]
+      },
+      "gold_answer": {
+        "must_mention": [
+          "The same procedure should not appear twice on a single claim",
+          "Patient is entitled to dispute the duplicate line item"
+        ],
+        "expected_sources_contain": ["ICD-10-CM", "CMS", "coding"],
+        "acceptable_if_context_insufficient": true,
+        "notes": "Variant of eval_001. Tests whether system handles the same duplicate format consistently."
+      }
+    },
+    {
+      "case_id": "eval_003",
+      "module": "duplicate_charge",
+      "description": "High-dollar duplicate surgical code",
+      "payload": {
+        "session_id": "eval-session-003",
+        "errors": [
+          {
+            "error_id": "err_003",
+            "module": "duplicate_charge",
+            "error_type": "Duplicate Charge",
+            "description": "CPT 27447 appears 2 time(s) on 2024-01-20. Line items 1 and 4 bill the same procedure on the same date. Duplicate billing for a single encounter is not permitted.",
+            "line_items_affected": [1, 4],
+            "estimated_dollar_impact": 12500.00,
+            "confidence": "high"
+          }
+        ]
+      },
+      "gold_answer": {
+        "must_mention": [
+          "A surgical procedure should be billed only once per operative session",
+          "The duplicate charge represents a significant overbilling"
+        ],
+        "expected_sources_contain": ["ICD-10-CM", "CMS", "procedure"],
+        "acceptable_if_context_insufficient": true,
+        "notes": "High dollar amount. Watch for hallucinated dollar figures — the system should not invent numbers beyond what was in the payload."
+      }
+    },
+    {
+      "case_id": "eval_004",
+      "module": "duplicate_charge",
+      "description": "Duplicate lab panel — medium confidence",
+      "payload": {
+        "session_id": "eval-session-004",
+        "errors": [
+          {
+            "error_id": "err_004",
+            "module": "duplicate_charge",
+            "error_type": "Duplicate Charge",
+            "description": "CPT 80053 appears 2 time(s) on 2024-02-10. Line items 3 and 6 bill the same procedure on the same date. Duplicate billing for a single encounter is not permitted.",
+            "line_items_affected": [3, 6],
+            "estimated_dollar_impact": 120.00,
+            "confidence": "medium"
+          }
+        ]
+      },
+      "gold_answer": {
+        "must_mention": [
+          "Duplicate lab panel charges on the same date should be reviewed",
+          "Patient should request clarification on whether two tests were medically necessary"
+        ],
+        "expected_sources_contain": ["ICD-10-CM", "coding"],
+        "acceptable_if_context_insufficient": true,
+        "notes": "Medium confidence case. Acceptable response acknowledges uncertainty while still explaining the concern."
+      }
+    },
+    {
+      "case_id": "eval_005",
+      "module": "medicare_rate_outlier",
+      "description": "Office visit billed at 700% of Medicare rate, SC locality",
+      "payload": {
+        "session_id": "eval-session-005",
+        "errors": [
+          {
+            "error_id": "err_005",
+            "module": "medicare_rate_outlier",
+            "error_type": "Medicare Rate Outlier",
+            "description": "CPT 99213 is billed at $525.00, which is 700% of the Medicare rate of $75.00 (CMS Locality 07 — Rest of South Carolina). Charges exceeding 300% of the Medicare rate are flagged as outliers.",
+            "line_items_affected": [1],
+            "estimated_dollar_impact": 450.00,
+            "confidence": "high"
+          }
+        ]
+      },
+      "gold_answer": {
+        "scoring_approach": "anti-hallucination",
+        "acceptable_if_context_insufficient": true,
+        "must_not_say": [
+          "Any specific dollar rate figure not provided in the payload",
+          "Any regulatory citation beyond CMS or RVU26B (e.g. fabricated statute names or AMA rules)",
+          "Any claim that the 300% threshold is a legal maximum — it is a detection threshold, not a legal cap"
+        ],
+        "citation_check": "Citation must reference RVU26B, CMS Physician Fee Schedule, or a CMS source. A citation to a non-existent document is a failure.",
+        "expected_sources_contain": ["CMS", "RVU26B", "fee schedule", "RVU"],
+        "notes": "PPRRVU2026 not in ChromaDB. RVU26B embedded but is a technical layout doc. Score on anti-hallucination only."
+      }
+    },
+    {
+      "case_id": "eval_006",
+      "module": "medicare_rate_outlier",
+      "description": "Physical therapy billed at 336% of Medicare rate, SC locality",
+      "payload": {
+        "session_id": "eval-session-006",
+        "errors": [
+          {
+            "error_id": "err_006",
+            "module": "medicare_rate_outlier",
+            "error_type": "Medicare Rate Outlier",
+            "description": "CPT 97110 is billed at $185.00, which is 336% of the Medicare rate of $55.00 (CMS Locality 07 — Rest of South Carolina). Charges exceeding 300% of the Medicare rate are flagged as outliers.",
+            "line_items_affected": [2],
+            "estimated_dollar_impact": 130.00,
+            "confidence": "medium"
+          }
+        ]
+      },
+      "gold_answer": {
+        "scoring_approach": "anti-hallucination",
+        "acceptable_if_context_insufficient": true,
+        "must_not_say": [
+          "Any specific dollar rate figure not provided in the payload",
+          "Any fabricated regulation name or statute",
+          "Any claim that the 300% threshold is a legal maximum"
+        ],
+        "citation_check": "Citation must reference RVU26B, CMS Physician Fee Schedule, or a CMS source. A citation to a non-existent document is a failure.",
+        "expected_sources_contain": ["CMS", "RVU26B", "fee schedule", "RVU"],
+        "notes": "Anti-hallucination scoring applies. Note: only SC locality (Locality 07) is implemented in the detector — NC locality was removed from this case to match actual system behaviour."
+      }
+    },
+    {
+      "case_id": "eval_007",
+      "module": "medicare_rate_outlier",
+      "description": "Imaging procedure billed at 1000% of Medicare rate, SC locality",
+      "payload": {
+        "session_id": "eval-session-007",
+        "errors": [
+          {
+            "error_id": "err_007",
+            "module": "medicare_rate_outlier",
+            "error_type": "Medicare Rate Outlier",
+            "description": "CPT 70553 is billed at $4,500.00, which is 1000% of the Medicare rate of $450.00 (CMS Locality 07 — Rest of South Carolina). Charges exceeding 300% of the Medicare rate are flagged as outliers.",
+            "line_items_affected": [1],
+            "estimated_dollar_impact": 4050.00,
+            "confidence": "high"
+          }
+        ]
+      },
+      "gold_answer": {
+        "scoring_approach": "anti-hallucination",
+        "acceptable_if_context_insufficient": true,
+        "must_not_say": [
+          "Any specific dollar rate figure not provided in the payload",
+          "Any fabricated regulation name or statute",
+          "Any claim that the 300% threshold is a legal maximum"
+        ],
+        "citation_check": "Citation must reference RVU26B, CMS Physician Fee Schedule, or a CMS source. A citation to a non-existent document is a failure.",
+        "expected_sources_contain": ["CMS", "RVU26B", "fee schedule", "RVU"],
+        "notes": "High dollar impact. Key check: does the system hallucinate a specific Medicare rate for CPT 70553? It should not — that figure is not in ChromaDB."
+      }
+    },
+    {
+      "case_id": "eval_008",
+      "module": "medicare_rate_outlier",
+      "description": "Surgical procedure billed at 674% of Medicare rate, SC locality",
+      "payload": {
+        "session_id": "eval-session-008",
+        "errors": [
+          {
+            "error_id": "err_008",
+            "module": "medicare_rate_outlier",
+            "error_type": "Medicare Rate Outlier",
+            "description": "CPT 29881 is billed at $6,200.00, which is 674% of the Medicare rate of $920.00 (CMS Locality 07 — Rest of South Carolina). Charges exceeding 300% of the Medicare rate are flagged as outliers.",
+            "line_items_affected": [1],
+            "estimated_dollar_impact": 5280.00,
+            "confidence": "high"
+          }
+        ]
+      },
+      "gold_answer": {
+        "scoring_approach": "anti-hallucination",
+        "acceptable_if_context_insufficient": true,
+        "must_not_say": [
+          "Any specific dollar rate figure not provided in the payload",
+          "Any fabricated regulation name or statute",
+          "Any claim that the 300% threshold is a legal maximum"
+        ],
+        "citation_check": "Citation must reference RVU26B, CMS Physician Fee Schedule, or a CMS source. A citation to a non-existent document is a failure.",
+        "expected_sources_contain": ["CMS", "RVU26B", "fee schedule", "locality"],
+        "notes": "If system mentions geographic practice cost indices (GPCI) that is a good sign — it retrieved real RVU26B content. But verify it did not invent a GPCI value."
+      }
+    },
+    {
+      "case_id": "eval_009",
+      "module": "eob_reconciliation",
+      "description": "Amount mismatch — provider bill shows more than EOB",
+      "payload": {
+        "session_id": "eval-session-009",
+        "errors": [
+          {
+            "error_id": "err_009",
+            "module": "eob_reconciliation",
+            "error_type": "EOB Reconciliation — Amount Mismatch",
+            "description": "CPT 99214 (line item 2): provider bill shows $350.00 but the EOB shows $180.00. Discrepancy: $170.00.",
+            "line_items_affected": [2],
+            "estimated_dollar_impact": 170.00,
+            "confidence": "high"
+          }
+        ]
+      },
+      "gold_answer": {
+        "must_mention": [
+          "In-network providers cannot bill patients beyond their cost-sharing obligation",
+          "The patient's responsibility is defined by the EOB, not the provider's billed amount",
+          "Billing above the insurer-negotiated rate is not permitted for in-network providers"
+        ],
+        "expected_sources_contain": ["EOB", "insurance", "balance billing", "patient responsibility"],
+        "acceptable_if_context_insufficient": true,
+        "notes": "EOB reconciliation may not have strong direct content in the knowledge base. Honest 'context does not address this' is acceptable. Watch for hallucinated insurance law citations."
+      }
+    },
+    {
+      "case_id": "eval_010",
+      "module": "eob_reconciliation",
+      "description": "CPT in provider bill not present on EOB at all",
+      "payload": {
+        "session_id": "eval-session-010",
+        "errors": [
+          {
+            "error_id": "err_010",
+            "module": "eob_reconciliation",
+            "error_type": "EOB Reconciliation — Missing from EOB",
+            "description": "CPT 99070 (line item 4) appears in the provider bill but is not present in the insurance EOB. This may indicate a billing or processing discrepancy.",
+            "line_items_affected": [4],
+            "estimated_dollar_impact": 75.00,
+            "confidence": "medium"
+          }
+        ]
+      },
+      "gold_answer": {
+        "must_mention": [
+          "Charges not listed on the EOB should be questioned before payment",
+          "Patient should contact the insurer to confirm whether this charge was submitted and processed"
+        ],
+        "expected_sources_contain": ["EOB", "insurance", "claim"],
+        "acceptable_if_context_insufficient": true,
+        "notes": "Medium confidence case. Tests system behaviour when EOB content is minimal in the knowledge base."
+      }
+    },
+    {
+      "case_id": "eval_011",
+      "module": "eob_reconciliation",
+      "description": "Date of service mismatch between provider bill and EOB",
+      "payload": {
+        "session_id": "eval-session-011",
+        "errors": [
+          {
+            "error_id": "err_011",
+            "module": "eob_reconciliation",
+            "error_type": "EOB Reconciliation — Date Mismatch",
+            "description": "CPT 99213 (line item 1): provider bill shows date 2024-05-10 but the EOB shows 2024-05-08.",
+            "line_items_affected": [1],
+            "estimated_dollar_impact": 0.0,
+            "confidence": "medium"
+          }
+        ]
+      },
+      "gold_answer": {
+        "must_mention": [
+          "Date discrepancies between the provider bill and EOB should be clarified with both the provider and insurer",
+          "Patients have the right to request an itemized bill to verify service dates"
+        ],
+        "expected_sources_contain": ["EOB", "insurance", "billing"],
+        "acceptable_if_context_insufficient": true,
+        "notes": "Date mismatch has $0 dollar impact (detector hardcodes this). Tests whether the system explains why date accuracy matters even without a dollar figure."
+      }
+    },
+    {
+      "case_id": "eval_012",
+      "module": "eob_reconciliation",
+      "description": "Insurer paid the claim in full — provider re-bills patient for $0 EOB balance",
+      "payload": {
+        "session_id": "eval-session-012",
+        "errors": [
+          {
+            "error_id": "err_012",
+            "module": "eob_reconciliation",
+            "error_type": "EOB Reconciliation — Amount Mismatch",
+            "description": "CPT 71046 (line item 3): provider bill shows $220.00 but the EOB shows $0.00. Discrepancy: $220.00.",
+            "line_items_affected": [3],
+            "estimated_dollar_impact": 220.00,
+            "confidence": "high"
+          }
+        ]
+      },
+      "gold_answer": {
+        "must_mention": [
+          "A service already paid in full by the insurer cannot be billed to the patient",
+          "Patient should present the EOB to the provider showing the claim was paid",
+          "Double billing is a billing error the provider must correct"
+        ],
+        "expected_sources_contain": ["EOB", "insurance", "patient responsibility"],
+        "acceptable_if_context_insufficient": true,
+        "notes": "EOB shows $0.00 — this is the re-billing scenario. The description is intentionally terse (matches detector output) but the RAG should still explain the implication."
+      }
+    },
+    {
+      "case_id": "eval_013",
+      "module": "no_surprises_act",
+      "description": "Out-of-network emergency physician at in-network hospital — emergency CPT range",
+      "payload": {
+        "session_id": "eval-session-013",
+        "errors": [
+          {
+            "error_id": "err_013",
+            "module": "no_surprises_act",
+            "error_type": "No Surprises Act Violation",
+            "description": "CPT 99283 (line item 1) may be a balance billing charge prohibited under the No Surprises Act. The provider is recorded as out-of-network in your EOB, and this charge relates to emergency care. Under the No Surprises Act (Pub. L. 116-260), patients are protected from balance billing in this context.",
+            "line_items_affected": [1],
+            "estimated_dollar_impact": 1800.00,
+            "confidence": "medium"
+          }
+        ]
+      },
+      "gold_answer": {
+        "must_mention": [
+          "The No Surprises Act prohibits balance billing for emergency services",
+          "Patients are only responsible for their in-network cost-sharing for emergency care regardless of provider network status",
+          "Out-of-network emergency providers cannot bill above the in-network rate"
+        ],
+        "expected_sources_contain": ["No Surprises Act", "emergency", "balance billing", "out-of-network"],
+        "acceptable_if_context_insufficient": false,
+        "notes": "Core NSA use case — knowledge base has strong content here. Failure to cite the No Surprises Act is a groundedness failure. Citation must reference an NSA PDF."
+      }
+    },
+    {
+      "case_id": "eval_014",
+      "module": "no_surprises_act",
+      "description": "Out-of-network anesthesiologist at in-network facility — ancillary provider",
+      "payload": {
+        "session_id": "eval-session-014",
+        "errors": [
+          {
+            "error_id": "err_014",
+            "module": "no_surprises_act",
+            "error_type": "No Surprises Act Violation",
+            "description": "CPT 01400 (line item 2) may be a balance billing charge prohibited under the No Surprises Act. The provider is recorded as out-of-network in your EOB, and this charge relates to services by an out-of-network ancillary provider at an in-network facility. Under the No Surprises Act (Pub. L. 116-260), patients are protected from balance billing in this context.",
+            "line_items_affected": [2],
+            "estimated_dollar_impact": 2400.00,
+            "confidence": "medium"
+          }
+        ]
+      },
+      "gold_answer": {
+        "must_mention": [
+          "The No Surprises Act protects patients from surprise bills from ancillary providers at in-network facilities",
+          "Anesthesiologists and other ancillary providers cannot balance bill when the facility is in-network",
+          "Patient should have received a good faith estimate in advance"
+        ],
+        "expected_sources_contain": ["No Surprises Act", "balance billing", "ancillary", "good faith estimate", "in-network facility"],
+        "acceptable_if_context_insufficient": false,
+        "notes": "Ancillary provider scenario. Good faith estimate requirement should be mentioned. Strong retrieval expected from NSA PDFs."
+      }
+    },
+    {
+      "case_id": "eval_015",
+      "module": "no_surprises_act",
+      "description": "Out-of-network radiologist at in-network imaging centre — ancillary provider",
+      "payload": {
+        "session_id": "eval-session-015",
+        "errors": [
+          {
+            "error_id": "err_015",
+            "module": "no_surprises_act",
+            "error_type": "No Surprises Act Violation",
+            "description": "CPT 72148 (line item 2) may be a balance billing charge prohibited under the No Surprises Act. The provider is recorded as out-of-network in your EOB, and this charge relates to services by an out-of-network ancillary provider at an in-network facility. Under the No Surprises Act (Pub. L. 116-260), patients are protected from balance billing in this context.",
+            "line_items_affected": [2],
+            "estimated_dollar_impact": 650.00,
+            "confidence": "medium"
+          }
+        ]
+      },
+      "gold_answer": {
+        "must_mention": [
+          "Out-of-network radiologists at in-network facilities are covered under No Surprises Act protections",
+          "The patient cannot be balance billed for the professional interpretation fee",
+          "Patient responsibility is limited to their in-network cost-sharing"
+        ],
+        "expected_sources_contain": ["No Surprises Act", "balance billing", "out-of-network", "in-network facility"],
+        "acceptable_if_context_insufficient": false,
+        "notes": "Tests retrieval for radiology ancillary scenario. NSA PDFs should cover this."
+      }
+    },
+    {
+      "case_id": "eval_016",
+      "module": "no_surprises_act",
+      "description": "Out-of-network hospitalist during in-network hospital admission — ancillary provider",
+      "payload": {
+        "session_id": "eval-session-016",
+        "errors": [
+          {
+            "error_id": "err_016",
+            "module": "no_surprises_act",
+            "error_type": "No Surprises Act Violation",
+            "description": "CPT 99232 (line item 1) may be a balance billing charge prohibited under the No Surprises Act. The provider is recorded as out-of-network in your EOB, and this charge relates to services by an out-of-network ancillary provider at an in-network facility. Under the No Surprises Act (Pub. L. 116-260), patients are protected from balance billing in this context.",
+            "line_items_affected": [1],
+            "estimated_dollar_impact": 750.00,
+            "confidence": "medium"
+          }
+        ]
+      },
+      "gold_answer": {
+        "must_mention": [
+          "The No Surprises Act protects patients from surprise bills from ancillary providers at in-network facilities",
+          "Hospitalists managing care during an in-network admission cannot balance bill the patient",
+          "Patient is only responsible for their in-network cost-sharing amount"
+        ],
+        "expected_sources_contain": ["No Surprises Act", "balance billing", "ancillary", "in-network facility"],
+        "acceptable_if_context_insufficient": false,
+        "notes": "Hospitalist scenario — replaces the original consent waiver case (eval_016 v1). The NoSurprisesActDetector skips elective OON cases (US-011 AC5), so a consent waiver scenario would never produce a DetectionResult. Hospitalist triggers the ancillary keyword and is a realistic ancillary NSA case."
+      }
+    }
+  ]
+}
