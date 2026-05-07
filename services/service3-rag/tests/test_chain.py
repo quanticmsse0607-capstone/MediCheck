@@ -33,7 +33,7 @@ def _reset_chain_singletons():
     """Reset module-level singletons between tests."""
     import rag.chain as chain_module
 
-    chain_module._retriever = None
+    chain_module._vectorstore = None
     chain_module._chain = None
     chain_module._letter_chain = None
 
@@ -56,8 +56,8 @@ class TestExplainDetection:
         import rag.chain as chain_module
 
         mock_doc = _make_doc("No Surprises Act at a Glance", "Key Protections", 2)
-        chain_module._retriever = MagicMock()
-        chain_module._retriever.invoke.return_value = [mock_doc]
+        chain_module._vectorstore = MagicMock()
+        chain_module._vectorstore.similarity_search.return_value = [mock_doc]
         chain_module._chain = MagicMock()
         chain_module._chain.invoke.return_value = "This is a plain-English explanation."
 
@@ -81,8 +81,8 @@ class TestExplainDetection:
         import rag.chain as chain_module
 
         doc = _make_doc("ICD-10-CM Guidelines", "", 5)
-        chain_module._retriever = MagicMock()
-        chain_module._retriever.invoke.return_value = [doc]
+        chain_module._vectorstore = MagicMock()
+        chain_module._vectorstore.similarity_search.return_value = [doc]
         chain_module._chain = MagicMock()
         chain_module._chain.invoke.return_value = "Explanation text."
 
@@ -105,8 +105,8 @@ class TestExplainDetection:
             _make_doc("No Surprises Act at a Glance", "Section A", 1),
             _make_doc("No Surprises Act at a Glance", "Section B", 3),
         ]
-        chain_module._retriever = MagicMock()
-        chain_module._retriever.invoke.return_value = docs
+        chain_module._vectorstore = MagicMock()
+        chain_module._vectorstore.similarity_search.return_value = docs
         chain_module._chain = MagicMock()
         chain_module._chain.invoke.return_value = "Explanation."
 
@@ -119,8 +119,8 @@ class TestExplainDetection:
     def test_empty_retrieval_returns_empty_citations(self):
         import rag.chain as chain_module
 
-        chain_module._retriever = MagicMock()
-        chain_module._retriever.invoke.return_value = []
+        chain_module._vectorstore = MagicMock()
+        chain_module._vectorstore.similarity_search.return_value = []
         chain_module._chain = MagicMock()
         chain_module._chain.invoke.return_value = "Explanation with no context."
 
@@ -133,8 +133,8 @@ class TestExplainDetection:
     def test_original_fields_preserved(self):
         import rag.chain as chain_module
 
-        chain_module._retriever = MagicMock()
-        chain_module._retriever.invoke.return_value = []
+        chain_module._vectorstore = MagicMock()
+        chain_module._vectorstore.similarity_search.return_value = []
         chain_module._chain = MagicMock()
         chain_module._chain.invoke.return_value = "Explanation."
 
@@ -172,8 +172,8 @@ class TestDraftLetterContent:
     def test_returns_string(self):
         import rag.chain as chain_module
 
-        chain_module._retriever = MagicMock()
-        chain_module._retriever.invoke.return_value = []
+        chain_module._vectorstore = MagicMock()
+        chain_module._vectorstore.similarity_search.return_value = []
         chain_module._letter_chain = MagicMock()
         chain_module._letter_chain.invoke.return_value = (
             "I respectfully request a review."
@@ -198,8 +198,8 @@ class TestDraftLetterContent:
     def test_handles_empty_errors_list(self):
         import rag.chain as chain_module
 
-        chain_module._retriever = MagicMock()
-        chain_module._retriever.invoke.return_value = []
+        chain_module._vectorstore = MagicMock()
+        chain_module._vectorstore.similarity_search.return_value = []
         chain_module._letter_chain = MagicMock()
         chain_module._letter_chain.invoke.return_value = "Dispute paragraph."
 
