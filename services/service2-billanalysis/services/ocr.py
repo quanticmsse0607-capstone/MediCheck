@@ -53,7 +53,9 @@ class OCRService:
             result["provider_name"] = self._extract_provider_name(full_text)
             result["date_of_service"] = self._extract_date(full_text)
             result["total_billed"] = self._extract_total(full_text)
-            result["line_items"] = self._extract_line_items(all_tables, full_text, source)
+            result["line_items"] = self._extract_line_items(
+                all_tables, full_text, source
+            )
 
         return result
 
@@ -81,8 +83,17 @@ class OCRService:
         lines = [l.strip() for l in text.split("\n") if l.strip()]
         for line in lines[:10]:
             if len(line) > 10 and line[0].isupper() and ":" not in line:
-                if any(w in line.upper() for w in
-                       ["HOSPITAL", "MEDICAL", "HEALTH", "CLINIC", "CENTER", "CARE"]):
+                if any(
+                    w in line.upper()
+                    for w in [
+                        "HOSPITAL",
+                        "MEDICAL",
+                        "HEALTH",
+                        "CLINIC",
+                        "CENTER",
+                        "CARE",
+                    ]
+                ):
                     return line
         return None
 
@@ -151,8 +162,13 @@ class OCRService:
                                 quantity = q
                         except ValueError:
                             pass
-                    if cell.upper() in ("IN", "OON", "OUT-OF-NETWORK",
-                                        "IN-NETWORK", "NON-PARTICIPATING"):
+                    if cell.upper() in (
+                        "IN",
+                        "OON",
+                        "OUT-OF-NETWORK",
+                        "IN-NETWORK",
+                        "NON-PARTICIPATING",
+                    ):
                         network_status = cell.upper()
 
                 if cpt_code:
@@ -215,8 +231,18 @@ class OCRService:
     def _is_header_row(self, row: list) -> bool:
         if not row:
             return False
-        keywords = ["date", "service", "cpt", "code", "description",
-                    "amount", "charge", "units", "rate", "billed"]
+        keywords = [
+            "date",
+            "service",
+            "cpt",
+            "code",
+            "description",
+            "amount",
+            "charge",
+            "units",
+            "rate",
+            "billed",
+        ]
         row_text = " ".join(str(cell or "").lower() for cell in row)
         return any(kw in row_text for kw in keywords)
 
