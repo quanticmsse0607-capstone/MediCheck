@@ -17,8 +17,11 @@ class Config:
     AWS_SECRET_ACCESS_KEY = os.environ.get("AWS_SECRET_ACCESS_KEY")
     AWS_REGION = os.environ.get("AWS_REGION", "us-east-1")
 
+    # Service 2
+    SERVICE2_BASE_URL = os.environ.get("SERVICE2_BASE_URL", "http://localhost:5001")
+
     # Service 3
-    SERVICE3_URL = os.environ.get("SERVICE3_URL", "http://localhost:5001")
+    SERVICE3_URL = os.environ.get("SERVICE3_URL", "http://localhost:5002")
     SERVICE3_TIMEOUT_SECONDS = 10  # NFR-18: explicit 10-second timeout, always
 
     # File upload limits (FR-01)
