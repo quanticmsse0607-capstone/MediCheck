@@ -7,6 +7,7 @@ import os
 from flask import Flask
 from config import config
 from extensions import db
+from flask_cors import CORS
 
 
 def create_app(config_name: str = None) -> Flask:
@@ -18,6 +19,7 @@ def create_app(config_name: str = None) -> Flask:
         app = create_app('development')       # for local dev
     """
     app = Flask(__name__)
+    CORS(app)
 
     # ── Load config ───────────────────────────────────────────────────────────
     config_name = config_name or os.environ.get("FLASK_ENV", "default")
