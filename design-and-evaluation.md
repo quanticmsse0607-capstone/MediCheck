@@ -2,6 +2,128 @@
 
 ---
 
+## Service 1 — React Frontend
+
+### Overview
+
+Service 1 is a React single-page application (SPA) that provides a user-friendly interface for patients to upload medical bills, review extracted fields, view detected billing errors, and generate formal dispute letters. The frontend is built with React 18 + React Router (client-side routing), styled with Tailwind CSS, and bundled with Vite. All API calls are proxied through a centralised service module (`medicheck.js`) that enforces the Service 2 API contract.
+
+**Architecture:**
+- Framework: React 18 + React Router v6
+- Styling: Tailwind CSS (responsive, utility-first)
+- Bundler: Vite
+- API client: Centralised `medicheck.js` module
+- Session management: URL-based (sessionId in path), stateless frontend
+- Deployment: Render (static site), environment variable for API endpoint
+
+---
+
+### User Flow
+
+Service 1 implements a **4-screen linear workflow** with stateless, URL-driven routing:
+
+1. **Upload (/)** — Patient uploads provider bill PDF (required) and EOB PDF (optional)
+   - `POST /upload` → receives `session_id`, `extracted_fields`, `rag_available` flag
+   - Navigates to `/confirm/{sessionId}`
+
+2. **Field Confirmation (/confirm/:sessionId)** — Patient reviews and corrects extracted fields
+   - Displays: patient_name, provider_name, date_of_service, total_billed, line_items[]
+   - Fields with confidence < 80% are highlighted (amber warning)
+   - All fields are inline-editable; confidence scores are stripped before submission
+   - `POST /confirm` → advances to `/report/{sessionId}`
+
+3. **Error Report (/report/:sessionId)** — Displays all detected billing errors
+   - `POST /analyse` triggered if not yet run; displays results immediately
+   - Error cards show: error type, description, estimated dollar impact, severity badge (high/medium/low)
+   - Cards styled by severity (red, amber, green)
+   - "Generate Dispute Letter" button triggers `POST /letter` → navigates to `/letter/{sessionId}`
+
+4. **Dispute Letter (/letter/:sessionId)** — Patient downloads formatted dispute letter
+   - Displays: DOCX download, PDF download
+   - Checklist of what dispute letter contains
+   - "Start Over" button returns to Upload screen
+
+**All routes require sessionId.** Back-button navigation and manual URL entry are supported — the API returns appropriate status codes (e.g., 404 if session expired). No local storage is used; all state lives in the URL and API responses.
+
+---
+
+### Component Structure
+
+```
+src/
+├── App.jsx                    # React Router root; all routes wrap Layout
+├── components/
+│   └── Layout.jsx             # Navigation header, footer, outlet for child routes
+├── pages/
+│   ├── Upload.jsx             # Screen 1: File upload
+│   ├── FieldConfirmation.jsx  # Screen 2: Review & edit extracted fields
+│   ├── ErrorReport.jsx        # Screen 3: Display detected errors & analysis
+│   └── DisputeLetter.jsx      # Screen 4: Download dispute letter
+├── api/
+│   └── medicheck.js           # Centralised API client for Service 2
+└── index.css                  # Tailwind imports + custom utility styles
+```
+
+**Key design principle:** Every page is self-contained. No context providers or Redux store — all state is local to each component. Session ID is passed via URL params; extracted_fields are passed via React Router state (on navigation). This keeps the frontend stateless and testable.
+
+---
+
+### API Integration
+
+All frontend→Service 2 calls go through `medicheck.js`:
+
+| Endpoint | Method | Purpose | Called from |
+|---|---|---|---|
+| `/upload` | POST | Upload bill & EOB PDFs | Upload.jsx |
+| `/confirm` | POST | Submit user-confirmed fields | FieldConfirmation.jsx |
+| `/analyse` | POST | Trigger error detection | ErrorReport.jsx |
+| `/letter` | POST | Generate dispute letter (DOCX/PDF) | ErrorReport.jsx & DisputeLetter.jsx |
+| `/report` | GET | Retrieve analysis results (internal fallback) | ErrorReport.jsx |
+
+**Error handling:** All network errors throw `ApiError` with structured error code, message, and HTTP status. Components catch and display user-friendly messages (e.g., "Upload failed. Please check your connection."). HTTP 200 responses are treated as success even if `rag_available: false` — the frontend gracefully degrades (shows "RAG unavailable; error explanations may be generic").
+
+**Multipart form data:** Only `/upload` uses multipart; all others use JSON.
+
+---
+
+### UI/UX Design Decisions
+
+**Flexbox & CSS Grid:**
+- **Upload page:** Flexbox column (centred content, max-width 2xl)
+- **FieldConfirmation:** CSS Grid two columns (desktop), one column (mobile) — each field is a grid item
+- **ErrorReport:** CSS Grid two columns (error cards), one column (mobile)
+- **DisputeLetter:** CSS Grid two columns (download buttons), Flexbox column (checklist)
+
+**Responsive design:**
+- All layouts use Tailwind breakpoints (`md:`, `lg:`, etc.)
+- Flex and grid automatically reflow on mobile — no JavaScript-based media query handling
+- Typography scales with `text-sm`, `text-base`, `text-lg`, `text-3xl` (not manually adjusted)
+
+**Confidence highlighting:**
+- Fields with `confidence < 80%` are wrapped in `bg-amber-100 border-amber-300` (soft warning, not error)
+- Patients can easily see which fields the OCR was uncertain about without being alarmed
+
+**Error severity badges:**
+- High-impact errors: `bg-red-100 text-red-700 border-red-300` (calls attention, justified high stakes)
+- Medium: `bg-amber-100 text-amber-700 border-amber-300` (caution)
+- Low/Informational: `bg-green-100 text-green-700 border-green-300` (acknowledgement, not concern)
+
+**Loading states:**
+- Each async operation sets `loading` state locally; displays spinner or "Loading…" message
+- Button becomes disabled during async operations to prevent double-submission
+
+---
+
+### Accessibility & Responsive Design Considerations
+
+- **Focus management:** React Router Link & button elements are keyboard-navigable
+- **Semantic HTML:** Form inputs use `<input>`, `<label>` correctly; error messages are associated with inputs via `aria-describedby` pattern (implicit)
+- **Mobile-first approach:** Base styles are mobile; desktop styles layer on top with breakpoints
+- **Colour contrast:** All text meets WCAG AA (Tailwind defaults are compliant)
+- **No client-side validation:** Validation is server-side (Service 2); frontend only displays errors returned by API
+
+---
+
 ## Service 3 — RAG & Explanation Service
 
 ### Overview
