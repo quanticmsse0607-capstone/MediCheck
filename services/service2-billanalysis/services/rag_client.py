@@ -62,26 +62,32 @@ class RAGClient:
             }
 
         except requests.Timeout:
-            # NFR-02: timeout → partial response, rag_available: false
             logger.warning(
                 "Service 3 /explain timed out after %ss for session %s",
                 self.timeout,
                 session_id,
             )
-            return {
-                "success": False,
-                "explanations": {},
-                "rag_available": False,
-            }
+            return {"success": False, "explanations": {}, "rag_available": False}
+
+        except requests.HTTPError as exc:
+            logger.error(
+                "Service 3 /explain returned HTTP %s for session %s: %s",
+                exc.response.status_code if exc.response is not None else "?",
+                session_id,
+                exc.response.text if exc.response is not None else exc,
+            )
+            return {"success": False, "explanations": {}, "rag_available": False}
+
+        except requests.ConnectionError:
+            logger.error(
+                "Service 3 /explain connection refused — is Service 3 running on %s?",
+                self.base_url,
+            )
+            return {"success": False, "explanations": {}, "rag_available": False}
 
         except requests.RequestException as exc:
-            # Any other connectivity issue — treat same as timeout
             logger.error("Service 3 /explain error for session %s: %s", session_id, exc)
-            return {
-                "success": False,
-                "explanations": {},
-                "rag_available": False,
-            }
+            return {"success": False, "explanations": {}, "rag_available": False}
 
     def generate_letter(self, session_id: str, analysis_data: dict) -> dict:
         """

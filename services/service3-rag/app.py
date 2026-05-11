@@ -36,9 +36,16 @@ def create_app(config_name: str = None) -> Flask:
     app.register_blueprint(draft_letter_bp)
 
     # ── Initialize RAG chain ──────────────────────────────────────────────────
+    import logging
     from rag.chain import init_chain
 
-    init_chain(app)
+    try:
+        init_chain(app)
+    except Exception as exc:
+        logging.getLogger(__name__).exception(
+            "RAG chain failed to initialize — /explain will return 503 until fixed"
+        )
+        print(f"[Service 3] RAG init FAILED: {type(exc).__name__}: {exc}", flush=True)
 
     return app
 

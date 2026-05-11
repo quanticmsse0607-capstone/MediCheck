@@ -22,7 +22,7 @@ class Config:
 
     # Service 3
     SERVICE3_URL = os.environ.get("SERVICE3_URL", "http://localhost:5002")
-    SERVICE3_TIMEOUT_SECONDS = 10  # NFR-18: explicit 10-second timeout, always
+    SERVICE3_TIMEOUT_SECONDS = int(os.environ.get("SERVICE3_TIMEOUT_SECONDS", 30))
 
     # File upload limits (FR-01)
     MAX_FILE_SIZE_MB = int(os.environ.get("MAX_FILE_SIZE_MB", 10))

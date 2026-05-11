@@ -95,6 +95,10 @@ _chain = None
 _letter_chain = None
 
 
+def is_ready() -> bool:
+    return _vectorstore is not None and _chain is not None
+
+
 def init_chain(app) -> None:
     """
     Initialize the RAG vectorstore and LCEL chain from Flask app config.
