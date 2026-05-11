@@ -233,3 +233,5 @@ Thumbs.db
 
 # Temporary Scope documents
 claude.md
+# Claude Code
+.claude/
