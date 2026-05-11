@@ -147,6 +147,64 @@ Results are written to `tests/eval_results.csv`. Citation accuracy and notes are
 
 ---
 
+### Example Evaluation Cases
+
+#### Module 2 (Medicare Rate Outlier) — eval_005
+
+**Input payload:**
+- CPT 99213 (office visit)
+- Billed: $525.00
+- Medicare rate (SC): $75.00
+- Confidence: high
+
+**System explanation:**
+> Your bill shows that you were charged $525.00 for a CPT code 99213, which is significantly higher than the Medicare rate of $75.00 for that service in South Carolina. This charge is 700% of the Medicare rate, and any charges exceeding 300% are flagged as outliers, indicating a potential billing error. Based on the guidance provided, this amount appears to be incorrect and should be reviewed for compliance with Medicare billing standards.
+
+**Citation:** CMS Physician Fee Schedule: File Layout and Rate Calculation Methodology (2026)
+
+**Evaluation:**
+- Groundedness: 100/100 — All figures ($525, $75, 700%, 300% threshold) directly from error payload; no hallucinated rates or regulations
+- Citation accurate: yes — Formula section in RVU26B directly supports Medicare rate calculation explanation
+
+---
+
+#### Module 4 (No Surprises Act) — eval_013
+
+**Input payload:**
+- Emergency out-of-network (OON) provider
+- Service: Emergency department care
+- $2,800 billed; No Surprises Act applies
+
+**System explanation:**
+> You received emergency care from an out-of-network provider. Under the No Surprises Act, you are entitled to cost-sharing based on the health plan's qualifying payment amount (QPA), not the provider's billed amount. This means you should not be charged more than you would have been if the provider was in-network. Your provider may not balance bill you for the difference between their charge and the QPA. You should contact your health plan to confirm your copay and file a complaint with your state insurance commissioner if the provider continues to bill you.
+
+**Citation:** No Surprises Act: Overview of Key Consumer Protections
+
+**Evaluation:**
+- Groundedness: 100/100 — Emergency OON scenarios are the core subject of NSA docs; no fabricated thresholds or invented legal terms
+- Citation accurate: yes — Consumer protection overview directly addresses emergency OON rights and balance billing prohibitions
+
+---
+
+### Why RAG Matters: Baseline Comparison
+
+**Without RAG (LLM-only):**
+- **Risk:** Fabricated regulation names ("CMS Outlier Rule 2026-15.4" — invented)
+- **Risk:** Invented dollar thresholds ("Federal law prohibits charges exceeding 350% of Medicare rate" — unprovable from training data)
+- **Result:** Patients receive plausible-sounding but grounded-in-training-data explanations that may not align with actual policy
+
+**With RAG (current implementation):**
+- **Grounding:** All factual claims about rates, thresholds, and regulations cite actual PDF sources from the knowledge base
+- **Accuracy:** Citation accuracy 94% (yes + partial); Groundedness mean 97/100
+- **Safety:** Date-of-service errors (eval_011) recognized as outside KB scope and fail gracefully (not hallucinated)
+
+**Quantified benefit:**
+- Groundedness: 94% of cases score ≥70/100 (acceptable grounding threshold)
+- No fabricated federal statute names or invented dollar figures in any of 16 cases
+- Knowledge base gaps (e.g., date mismatch) are transparent, not silently hallucinated
+
+---
+
 ### Findings
 
 #### Module 1 — Duplicate Charge
