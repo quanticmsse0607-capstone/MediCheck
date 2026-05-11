@@ -11,14 +11,13 @@ def health():
     Must respond within 2 seconds (NFR-04).
     Does not require authentication.
     """
-    rag_ready = is_ready()
     return (
         jsonify(
             {
-                "status": "ok" if rag_ready else "degraded",
+                "status": "ok",
                 "service": "rag-letter",
                 "version": "1.0.0",
-                "rag_chain_ready": rag_ready,
+                "rag_chain_ready": is_ready(),
             }
         ),
         200,
