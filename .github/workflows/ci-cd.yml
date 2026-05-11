@@ -188,26 +188,35 @@ jobs:
             -d '{"clearCache": false}'
           echo "Service 3 deploy triggered"
 
-      - name: Wait for deployments to complete
-        run: sleep 60
-
       - name: Health check Service 2
         run: |
-          response=$(curl -s -o /dev/null -w "%{http_code}" \
-            https://medicheck-bill-analysis.onrender.com/health)
-          if [ "$response" != "200" ]; then
-            echo "Service 2 health check FAILED - HTTP $response"
-            exit 1
-          fi
-          echo "Service 2 health check PASSED - HTTP $response"
+          echo "Waiting for Service 2 to be ready..."
+          for i in $(seq 1 24); do
+            response=$(curl -s -o /dev/null -w "%{http_code}" \
+              https://medicheck-bill-analysis.onrender.com/health)
+            if [ "$response" = "200" ]; then
+              echo "Service 2 health check PASSED - HTTP $response (attempt $i)"
+              exit 0
+            fi
+            echo "Attempt $i: HTTP $response — retrying in 15s..."
+            sleep 15
+          done
+          echo "Service 2 health check FAILED after 6 minutes"
+          exit 1
 
       - name: Health check Service 3
         if: vars.SERVICE3_ENABLED == 'true'
         run: |
-          response=$(curl -s -o /dev/null -w "%{http_code}" \
-            https://medicheck-rag.onrender.com/health)
-          if [ "$response" != "200" ]; then
-            echo "Service 3 health check FAILED - HTTP $response"
-            exit 1
-          fi
-          echo "Service 3 health check PASSED - HTTP $response"
+          echo "Waiting for Service 3 to be ready..."
+          for i in $(seq 1 24); do
+            response=$(curl -s -o /dev/null -w "%{http_code}" \
+              https://medicheck-rag.onrender.com/health)
+            if [ "$response" = "200" ]; then
+              echo "Service 3 health check PASSED - HTTP $response (attempt $i)"
+              exit 0
+            fi
+            echo "Attempt $i: HTTP $response — retrying in 15s..."
+            sleep 15
+          done
+          echo "Service 3 health check FAILED after 6 minutes"
+          exit 1
