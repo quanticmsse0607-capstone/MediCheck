@@ -166,18 +166,19 @@ def explain_detection(detection: dict) -> dict:
         {"document_title": {"$in": allowed_sources}} if allowed_sources else None
     )
 
-    if source_filter:
+    if allowed_sources is not None:
         logger.debug(
             "Module '%s' — restricting retrieval to %d sources",
             module,
             len(allowed_sources),
         )
+        docs = _vectorstore.similarity_search(query, k=_top_k, filter=source_filter)
     else:
         logger.warning(
-            "Module '%s' has no source allowlist — searching all documents", module
+            "Module '%s' has no source allowlist — skipping retrieval, returning empty context",
+            module,
         )
-
-    docs = _vectorstore.similarity_search(query, k=_top_k, filter=source_filter)
+        docs = []
 
     context = "\n\n".join(doc.page_content for doc in docs)
 
