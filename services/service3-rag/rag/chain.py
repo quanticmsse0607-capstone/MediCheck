@@ -99,6 +99,12 @@ def is_ready() -> bool:
     return _vectorstore is not None and _chain is not None
 
 
+def _sanitize(text: str, max_length: int) -> str:
+    """Truncate and strip control characters from OCR-originated text before
+    using as an embedding query or LLM prompt variable."""
+    return " ".join(str(text)[:max_length].split())
+
+
 def init_chain(app) -> None:
     """
     Initialize the RAG vectorstore and LCEL chain from Flask app config.
@@ -158,7 +164,9 @@ def explain_detection(detection: dict) -> dict:
     if _vectorstore is None or _chain is None:
         raise RuntimeError("RAG chain is not initialized. Call init_chain(app) first.")
 
-    query = f"{detection['error_type']}: {detection['description']}"
+    error_type = _sanitize(detection["error_type"], 100)
+    description = _sanitize(detection["description"], 500)
+    query = f"{error_type}: {description}"
 
     module = detection.get("module", "")
     allowed_sources = MODULE_SOURCE_ALLOWLIST.get(module)
@@ -184,8 +192,8 @@ def explain_detection(detection: dict) -> dict:
 
     explanation = _chain.invoke(
         {
-            "error_type": detection["error_type"],
-            "description": detection["description"],
+            "error_type": error_type,
+            "description": description,
             "context": context,
         }
     )
