@@ -113,7 +113,9 @@ class TestExplainDetection:
 
         from rag.chain import explain_detection
 
-        result = explain_detection({"error_type": "Test", "description": "Test", "module": "no_surprises_act"})
+        result = explain_detection(
+            {"error_type": "Test", "description": "Test", "module": "no_surprises_act"}
+        )
 
         assert len(result["citations"]) == 1
 

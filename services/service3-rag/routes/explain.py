@@ -84,7 +84,15 @@ def explain():
         if not error.get(field)
     ]
     if validation_errors:
-        return jsonify({"error": "One or more errors failed validation.", "details": validation_errors}), 400
+        return (
+            jsonify(
+                {
+                    "error": "One or more errors failed validation.",
+                    "details": validation_errors,
+                }
+            ),
+            400,
+        )
 
     explanations: dict[str, dict] = {}
 
