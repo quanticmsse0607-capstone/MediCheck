@@ -21,8 +21,11 @@ export default function DisputeLetter() {
   // Add this helper function at the top of the component
   const proxyUrl = (url) => {
     if (!url) return '#'
-    // Replace the full base URL with /api so Vite proxy handles it
-    return url.replace(/^https?:\/\/[^/]+/, '/api')
+    try {
+      return `/api${new URL(url).pathname}`
+    } catch {
+      return '#'
+    }
   }
 
   useEffect(() => {
