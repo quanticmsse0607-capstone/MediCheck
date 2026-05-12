@@ -76,21 +76,19 @@ def explain():
     if len(errors) == 0:
         return jsonify({"explanations": {}}), 200
 
+    # Validate all errors before processing any — report every invalid item at once
+    validation_errors = [
+        f"Index {i}: missing required field '{field}'."
+        for i, error in enumerate(errors)
+        for field in REQUIRED_FIELDS
+        if not error.get(field)
+    ]
+    if validation_errors:
+        return jsonify({"error": "One or more errors failed validation.", "details": validation_errors}), 400
+
     explanations: dict[str, dict] = {}
 
     for i, error in enumerate(errors):
-        # Validate required fields
-        for field in REQUIRED_FIELDS:
-            if not error.get(field):
-                return (
-                    jsonify(
-                        {
-                            "error": f"Error at index {i} is missing required field '{field}'."
-                        }
-                    ),
-                    400,
-                )
-
         if error["module"] not in KNOWN_MODULES:
             logger.warning(
                 "Received unknown module '%s' — processing anyway.", error["module"]
