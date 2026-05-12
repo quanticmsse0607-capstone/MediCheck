@@ -43,9 +43,9 @@ def create_app(config_name: str = None) -> Flask:
         init_chain(app)
     except Exception as exc:
         logging.getLogger(__name__).exception(
-            "RAG chain failed to initialize — /explain will return 503 until fixed"
+            "RAG chain failed to initialize — aborting startup"
         )
-        print(f"[Service 3] RAG init FAILED: {type(exc).__name__}: {exc}", flush=True)
+        raise
 
     return app
 
