@@ -190,18 +190,17 @@ jobs:
 
       - name: Health check Service 2
         run: |
-          echo "Waiting for Service 2 to be ready..."
-          for i in $(seq 1 24); do
+          for i in 1 2 3; do
             response=$(curl -s -o /dev/null -w "%{http_code}" \
               https://medicheck-bill-analysis.onrender.com/health)
             if [ "$response" = "200" ]; then
               echo "Service 2 health check PASSED - HTTP $response (attempt $i)"
               exit 0
             fi
-            echo "Attempt $i: HTTP $response — retrying in 15s..."
-            sleep 15
+            echo "Attempt $i: HTTP $response — retrying in 30s..."
+            sleep 30
           done
-          echo "Service 2 health check FAILED after 6 minutes"
+          echo "Service 2 health check FAILED after 3 attempts"
           exit 1
 
       - name: Health check Service 3
