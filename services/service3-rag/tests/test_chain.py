@@ -92,6 +92,7 @@ class TestExplainDetection:
             {
                 "error_type": "Coding Error",
                 "description": "Wrong ICD-10 code used.",
+                "module": "no_surprises_act",
             }
         )
 
@@ -112,7 +113,9 @@ class TestExplainDetection:
 
         from rag.chain import explain_detection
 
-        result = explain_detection({"error_type": "Test", "description": "Test"})
+        result = explain_detection(
+            {"error_type": "Test", "description": "Test", "module": "no_surprises_act"}
+        )
 
         assert len(result["citations"]) == 1
 
@@ -128,6 +131,26 @@ class TestExplainDetection:
 
         result = explain_detection({"error_type": "Test", "description": "Test"})
 
+        assert result["citations"] == []
+
+    def test_unknown_module_skips_retrieval(self):
+        import rag.chain as chain_module
+
+        chain_module._vectorstore = MagicMock()
+        chain_module._chain = MagicMock()
+        chain_module._chain.invoke.return_value = "No guidance available."
+
+        from rag.chain import explain_detection
+
+        result = explain_detection(
+            {
+                "error_type": "Unknown Error",
+                "description": "Some unknown billing issue.",
+                "module": "unknown_future_module",
+            }
+        )
+
+        chain_module._vectorstore.similarity_search.assert_not_called()
         assert result["citations"] == []
 
     def test_original_fields_preserved(self):

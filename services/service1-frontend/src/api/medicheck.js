@@ -36,7 +36,18 @@ async function request(method, path, body = null, isMultipart = false) {
   }
 
   const response = await fetch(`${BASE_URL}${path}`, options)
-  const data = await response.json()
+
+  let data
+  try {
+    data = await response.json()
+  } catch {
+    throw new ApiError(
+      'INVALID_RESPONSE',
+      `Service returned an unexpected response (HTTP ${response.status}). Please try again.`,
+      null,
+      response.status
+    )
+  }
 
   if (!response.ok) {
     throw new ApiError(
