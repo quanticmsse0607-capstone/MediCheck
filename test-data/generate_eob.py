@@ -48,7 +48,9 @@ def create_sample_eob():
 
     # ── Header ───────────────────────────────────────────────
     story.append(Paragraph("EXPLANATION OF BENEFITS", title_style))
-    story.append(Paragraph("This is not a bill. Keep for your records.", styles["Normal"]))
+    story.append(
+        Paragraph("This is not a bill. Keep for your records.", styles["Normal"])
+    )
     story.append(Spacer(1, 0.2 * inch))
 
     # ── Insurer info ─────────────────────────────────────────
@@ -78,7 +80,9 @@ def create_sample_eob():
         ["Provider:", "Metropolitan Hospital Center", "NPI:", "1234567890"],
         ["Service Period:", "04/05/2026 - 04/08/2026", "Copay:", "$50.00"],
     ]
-    member_table = Table(member_data, colWidths=[1.5 * inch, 2.2 * inch, 1.5 * inch, 2.3 * inch])
+    member_table = Table(
+        member_data, colWidths=[1.5 * inch, 2.2 * inch, 1.5 * inch, 2.3 * inch]
+    )
     member_table.setStyle(
         TableStyle(
             [
@@ -123,7 +127,15 @@ def create_sample_eob():
         ["04/08/2026", "99490", "$300.00", "$150.00", "$120.00", "$30.00", "IN"],
     ]
 
-    col_widths = [0.9 * inch, 0.7 * inch, 0.9 * inch, 0.9 * inch, 0.9 * inch, 0.9 * inch, 0.8 * inch]
+    col_widths = [
+        0.9 * inch,
+        0.7 * inch,
+        0.9 * inch,
+        0.9 * inch,
+        0.9 * inch,
+        0.9 * inch,
+        0.8 * inch,
+    ]
     service_table = Table(service_data, colWidths=col_widths)
     service_table.setStyle(
         TableStyle(
@@ -135,7 +147,12 @@ def create_sample_eob():
                 ("ALIGN", (0, 0), (-1, -1), "CENTER"),
                 ("FONT", (0, 1), (-1, -1), "Helvetica", 8),
                 ("GRID", (0, 0), (-1, -1), 1, colors.black),
-                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F0F7F0")]),
+                (
+                    "ROWBACKGROUNDS",
+                    (0, 1),
+                    (-1, -1),
+                    [colors.white, colors.HexColor("#F0F7F0")],
+                ),
                 # Highlight OON row in amber
                 ("BACKGROUND", (0, 10), (-1, 10), colors.HexColor("#FFF3CD")),
                 ("TEXTCOLOR", (6, 10), (6, 10), colors.HexColor("#CC0000")),
@@ -202,10 +219,16 @@ def create_sample_eob():
     print(f"   Insurer: UnitedHealthcare PPO Gold")
     print(f"   Service Period: 04/05/2026 - 04/08/2026")
     print(f"\n🎯 Expected detectors to fire:")
-    print(f"   Module 1 — Duplicate charge: 99231 appears twice (same CPT, different dates — should NOT flag)")
+    print(
+        f"   Module 1 — Duplicate charge: 99231 appears twice (same CPT, different dates — should NOT flag)"
+    )
     print(f"   Module 2 — Rate outlier: 99282, 99291, 99215 all above 300% Medicare")
-    print(f"   Module 3 — EOB reconciliation: 99291 billed $1200 vs EOB $800 → mismatch")
-    print(f"   Module 4 — No Surprises Act: 99215 marked OON in EOB → potential violation")
+    print(
+        f"   Module 3 — EOB reconciliation: 99291 billed $1200 vs EOB $800 → mismatch"
+    )
+    print(
+        f"   Module 4 — No Surprises Act: 99215 marked OON in EOB → potential violation"
+    )
     print(f"\n🚀 Upload both files to MediCheck:")
     print(f"   Bill: test_bill.pdf")
     print(f"   EOB:  test_eob.pdf")

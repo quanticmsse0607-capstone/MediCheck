@@ -20,7 +20,13 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from app import create_app
 from extensions import db as _db
-from models import Session as BillSession, ExtractedField, LineItem, AnalysisResult, SessionStatus
+from models import (
+    Session as BillSession,
+    ExtractedField,
+    LineItem,
+    AnalysisResult,
+    SessionStatus,
+)
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -441,7 +447,9 @@ class TestStateMachineEnforcement:
 
     def test_unknown_session_returns_404(self, client):
         """FR-09: unknown session_id returns HTTP 404."""
-        r = client.post("/confirm", json={"session_id": "does-not-exist", "confirmed_fields": {}})
+        r = client.post(
+            "/confirm", json={"session_id": "does-not-exist", "confirmed_fields": {}}
+        )
         assert r.status_code == 404
         assert r.get_json()["error_code"] == "SESSION_NOT_FOUND"
 
@@ -500,7 +508,7 @@ class TestSmokeTests:
     def test_all_endpoints_exist(self, client):
         """Smoke test — all required endpoints return non-404."""
         endpoints = [
-            ("GET",  "/health"),
+            ("GET", "/health"),
             ("POST", "/upload"),
             ("POST", "/confirm"),
             ("POST", "/analyse"),
@@ -511,4 +519,6 @@ class TestSmokeTests:
                 r = client.get(path)
             else:
                 r = client.post(path, json={})
-            assert r.status_code != 405, f"{method} {path} returned 405 — route not registered"
+            assert (
+                r.status_code != 405
+            ), f"{method} {path} returned 405 — route not registered"
