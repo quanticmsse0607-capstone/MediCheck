@@ -69,20 +69,29 @@ class OCRService:
             for row in table:
                 cells = [str(c or "").strip() for c in row]
                 for i, cell in enumerate(cells):
-                    if re.match(r"patient\s*name[:\s]*$", cell, re.IGNORECASE):
+                    if re.match(r"patient(\s*name)?[:\s]*$", cell, re.IGNORECASE):
                         if i + 1 < len(cells) and cells[i + 1]:
-                            # Take first 3 words only
                             words = cells[i + 1].split()[:3]
                             return " ".join(words)
-                    if re.match(r"member\s*name[:\s]*$", cell, re.IGNORECASE):
+                    if re.match(r"member(\s*name)?[:\s]*$", cell, re.IGNORECASE):
                         if i + 1 < len(cells) and cells[i + 1]:
                             words = cells[i + 1].split()[:3]
                             return " ".join(words)
 
-        # Fallback — text pattern
+        # Text patterns — covers Patient:, Patient Name:, Member:, Beneficiary:, Insured:
+        # Stop at known non-name words
+        name_stop = r"(?:Svc|DOB|Date|Member|Group|Account|Plan|ID|Phone|\d)"
         patterns = [
-            r"Patient\s+Name[:\s]+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){1,3})",
-            r"Member\s+Name[:\s]+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){1,3})",
+            r"Patient\s*Name[:\s]+([A-Z][a-zA-Z-']+(?:\s+[A-Z][a-zA-Z-']+){1,3}?)(?:\s+"
+            + name_stop
+            + r"|$)",
+            r"Patient[:\s]+([A-Z][a-zA-Z-']+(?:\s+[A-Z][a-zA-Z-']+){1,3}?)(?:\s+"
+            + name_stop
+            + r"|$)",
+            r"Member\s*Name[:\s]+([A-Z][a-zA-Z-']+(?:\s+[A-Z][a-zA-Z-']+){1,3})",
+            r"Member[:\s]+([A-Z][a-zA-Z-']+(?:\s+[A-Z][a-zA-Z-']+){1,3})",
+            r"Beneficiary[:\s]+([A-Z][a-zA-Z-']+(?:\s+[A-Z][a-zA-Z-']+){1,3})",
+            r"Insured[:\s]+([A-Z][a-zA-Z-']+(?:\s+[A-Z][a-zA-Z-']+){1,3})",
         ]
         for pattern in patterns:
             match = re.search(pattern, text)
@@ -156,13 +165,32 @@ class OCRService:
                 return clean_line[:80]
 
         # Second pass — mixed case with provider keyword, no colon
+        # Skip lines that look like service rows (start with date or contain $ amounts)
+        visit_skip = re.compile(
+            r"^(office\s+visit|lab\s+visit|date|svc|service|\d{1,2}/\d{1,2})",
+            re.IGNORECASE,
+        )
         for line in lines[:20]:
             if len(line) > 10 and ":" not in line and not line.startswith("$"):
+                if visit_skip.match(line):
+                    continue
+                # Skip lines with dollar amounts — service rows not provider names
+                if re.search(r"\$[\d,]+\.\d{2}", line):
+                    continue
                 if any(w in line.upper() for w in provider_keywords):
                     if not any(w in line.upper() for w in title_skip_words):
                         return line[:80]
 
-        # Third pass — labelled field
+        # Third pass — "Visit to PROVIDER" pattern
+        visit_match = re.search(
+            r"(?:Office|Lab|Urgent Care|ER|Emergency)\s+Visit\s+to\s+([^\n]{5,60})",
+            text,
+            re.IGNORECASE,
+        )
+        if visit_match:
+            return visit_match.group(1).strip()[:80]
+
+        # Fourth pass — labelled field
         patterns = [
             r"(?:Provider|Facility|Hospital)[:\s]+([A-Z][^\n]{5,60})",
             r"(?:From|Billed\s+by)[:\s]+([A-Z][^\n]{5,60})",
@@ -180,12 +208,14 @@ class OCRService:
         """
         Use first service date from the service table.
         Skip: Bill Date, Service Period, Date of Birth, Account dates.
+        Handles: MM/DD/YYYY, MM-DD-YYYY, Month DD YYYY formats.
         """
         # Explicit label patterns first
         explicit_patterns = [
-            r"Date\s+of\s+Service[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{4})",
-            r"Service\s+Date[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{4})",
-            r"\bDOS[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{4})",
+            r"Date\s*(?:of\s*Service|s\s*of\s*Service)[:\s]+(\w+ \d{1,2},?\s*\d{4})",
+            r"Date\s*(?:of\s*Service|s\s*of\s*Service)[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
+            r"Service\s+Date[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
+            r"\bDOS[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
         ]
         for pattern in explicit_patterns:
             match = re.search(pattern, text, re.IGNORECASE)
@@ -198,12 +228,25 @@ class OCRService:
             r"\bbirth\b|account|period|through|thru|-\s+\d{2}/\d{2}/\d{4}",
             re.IGNORECASE,
         )
+        months = (
+            r"January|February|March|April|May|June|July|August|"
+            r"September|October|November|December"
+        )
         for line in text.split("\n"):
             if skip_pattern.search(line):
                 continue
+            # MM/DD/YYYY format
             date_match = re.search(r"\b(\d{2}/\d{2}/\d{4})\b", line)
             if date_match:
                 return date_match.group(1)
+            # Month DD, YYYY format (e.g. November 29, 2021)
+            date_match = re.search(
+                rf"\b({months})\s+\d{{1,2}},?\s*\d{{4}}\b",
+                line,
+                re.IGNORECASE,
+            )
+            if date_match:
+                return date_match.group(0).strip()
 
         return None
 
@@ -215,11 +258,14 @@ class OCRService:
             r"Total\s+Billed[:\s]+\$?([\d,]+\.\d{2})",
             r"Total\s+Amount[:\s]+\$?([\d,]+\.\d{2})",
             r"Amount\s+Due[:\s]+\$?([\d,]+\.\d{2})",
+            r"Balance\s+Due[:\s]+\$?([\d,]+\.\d{2})",
         ]
         for pattern in patterns:
             match = re.search(pattern, text, re.IGNORECASE)
             if match:
-                return self._parse_amount(match.group(1))
+                val = self._parse_amount(match.group(1))
+                if val and val > 0:
+                    return val
         return None
 
     # ── Line items from tables ─────────────────────────────────────────────────
@@ -323,7 +369,12 @@ class OCRService:
     # ── Line items from text (fallback only) ───────────────────────────────────
 
     def _extract_line_items_from_text(self, text: str, source: str) -> list:
-        """Only called when no tables produced line items."""
+        """
+        Text-only line item extraction for bills with no table structure.
+        Handles: 11/26/21 90471 Description ... 1 $57.00
+        Also handles 2-digit years (11/26/21 -> 11/26/2021).
+        Skips insurance payments and adjustments.
+        """
         line_items = []
         line_number = 1
         seen = set()
@@ -333,21 +384,46 @@ class OCRService:
             if not line:
                 continue
 
+            # Skip insurance payment/adjustment lines
+            if re.search(
+                r"insurance|adjustment|payment|contractual|\b2000\b|\b3000\b",
+                line,
+                re.IGNORECASE,
+            ):
+                continue
+
             cpt_match = re.search(r"\b(\d{5})\b", line)
             if not cpt_match:
                 continue
 
             cpt_code = cpt_match.group(1)
 
-            # Use last amount
-            amounts = [
-                self._parse_amount(m) for m in re.findall(r"\$?([\d,]+\.\d{2})", line)
+            # Find all dollar amounts on this line
+            all_dollar_positions = [
+                (m.start(), m.group(1)) for m in re.finditer(r"\$([\d,]+\.\d{2})", line)
             ]
-            amounts = [a for a in amounts if a and a > 0]
-            amount = amounts[-1] if amounts else 0.0
 
-            date_match = re.search(r"\b(\d{1,2}/\d{1,2}/\d{4})\b", line)
-            date = date_match.group(1) if date_match else None
+            # Keep only positive amounts (not preceded by minus)
+            positive_amounts = []
+            for pos, val in all_dollar_positions:
+                if pos > 0 and line[pos - 1] == "-":
+                    continue
+                parsed = self._parse_amount(val)
+                if parsed and parsed > 0:
+                    positive_amounts.append(parsed)
+
+            amount = positive_amounts[-1] if positive_amounts else 0.0
+
+            # Date — handle MM/DD/YY and MM/DD/YYYY
+            date = None
+            date_match = re.search(r"\b(\d{1,2}/\d{1,2}/\d{2,4})\b", line)
+            if date_match:
+                date = date_match.group(1)
+                parts = date.split("/")
+                if len(parts) == 3 and len(parts[2]) == 2:
+                    yr = int(parts[2])
+                    parts[2] = str(2000 + yr) if yr <= 50 else str(1900 + yr)
+                    date = "/".join(parts)
 
             key = (cpt_code, date or "nodate")
             if key in seen:
@@ -381,8 +457,11 @@ class OCRService:
             return False
         header_text = " ".join(str(c or "").lower() for c in table[0])
         has_cpt = any(w in header_text for w in ["cpt", "code", "procedure"])
-        has_amount = any(w in header_text for w in ["amount", "charge", "billed"])
-        return has_cpt and has_amount
+        has_amount = any(
+            w in header_text for w in ["amount", "charge", "billed", "bill"]
+        )
+        has_date = any(w in header_text for w in ["date", "svc dt", "svc", "dos"])
+        return has_cpt and (has_amount or has_date)
 
     def _is_header_row(self, row: list) -> bool:
         if not row:
