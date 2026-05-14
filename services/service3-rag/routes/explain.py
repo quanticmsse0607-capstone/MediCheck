@@ -35,6 +35,7 @@ Response (200):
 """
 
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from flask import Blueprint, jsonify, request
 
@@ -94,28 +95,38 @@ def explain():
             400,
         )
 
-    explanations: dict[str, dict] = {}
-
-    for i, error in enumerate(errors):
+    for error in errors:
         if error["module"] not in KNOWN_MODULES:
             logger.warning(
                 "Received unknown module '%s' — processing anyway.", error["module"]
             )
 
-        try:
-            result = explain_detection(error)
-        except RuntimeError as exc:
-            logger.exception("RAG chain not ready for error at index %d", i)
-            return jsonify({"error": str(exc)}), 503
-        except Exception as exc:
-            logger.exception(
-                "RAG chain error for module '%s' at index %d", error.get("module"), i
-            )
-            return jsonify({"error": "RAG chain error.", "detail": str(exc)}), 500
+    def _run(indexed_error):
+        i, error = indexed_error
+        return i, error["error_id"], explain_detection(error)
 
-        explanations[error["error_id"]] = {
-            "explanation": result["explanation"],
-            "citations": result["citations"],
+    explanations: dict[str, dict] = {}
+    # Cap at 5 workers — enough to cover all expected modules without flooding OpenAI
+    max_workers = min(len(errors), 5)
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {
+            executor.submit(_run, (i, error)): i
+            for i, error in enumerate(errors)
         }
+        for future in as_completed(futures):
+            try:
+                i, error_id, result = future.result()
+            except RuntimeError as exc:
+                logger.exception("RAG chain not ready")
+                return jsonify({"error": str(exc)}), 503
+            except Exception as exc:
+                logger.exception("RAG chain error for future index %d", futures[future])
+                return jsonify({"error": "RAG chain error.", "detail": str(exc)}), 500
+
+            explanations[error_id] = {
+                "explanation": result["explanation"],
+                "citations": result["citations"],
+            }
 
     return jsonify({"session_id": session_id, "explanations": explanations}), 200
