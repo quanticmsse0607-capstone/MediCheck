@@ -60,7 +60,7 @@ export default function ErrorReport() {
         Checking for duplicate charges, rate outliers, EOB mismatches,
         and No Surprises Act violations.
       </p>
-      <p className="text-gray-400 text-xs">This may take up to 30 seconds.</p>
+      <p className="text-gray-400 text-xs">This may take up to 15 seconds.</p>
     </div>
   )
 
@@ -160,9 +160,12 @@ function ErrorCard({ error }) {
           </span>
           <span className="text-xs text-gray-500">{error.module?.replace(/_/g, ' ')}</span>
         </div>
-        <span className="text-sm font-bold text-gray-800 whitespace-nowrap">
-          ${error.estimated_dollar_impact?.toFixed(2)}
-        </span>
+        <div className="flex flex-col items-end gap-0.5">
+          <span className="text-xs text-gray-400 uppercase tracking-wide">Est. savings</span>
+          <span className="text-sm font-bold text-green-700 whitespace-nowrap">
+            ${error.estimated_dollar_impact?.toFixed(2)}
+          </span>
+        </div>
       </div>
 
       {/* Error details — Flexbox column */}
