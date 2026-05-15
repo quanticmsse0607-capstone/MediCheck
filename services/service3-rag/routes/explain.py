@@ -111,8 +111,7 @@ def explain():
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {
-            executor.submit(_run, (i, error)): i
-            for i, error in enumerate(errors)
+            executor.submit(_run, (i, error)): i for i, error in enumerate(errors)
         }
         for future in as_completed(futures):
             try:

@@ -11,5 +11,6 @@ pytest==8.2.2
 pytest-mock==3.14.0
 black==24.4.2
 pylint==3.2.3
-gunicorn==22.0.0pdf2image==1.17.0
+gunicorn==22.0.0
+pdf2image==1.17.0
 pillow==10.3.0
