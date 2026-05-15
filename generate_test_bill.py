@@ -25,7 +25,9 @@ def create_sample_bill():
     """Create a realistic sample medical bill PDF"""
 
     # Output path
-    output_path = "/Users/shifalisrivastava/Documents/Capstone/MediCheck/test_bill.pdf"
+    output_dir = os.path.join(os.path.dirname(__file__), "test-data", "synthetic")
+    os.makedirs(output_dir, exist_ok=True)
+    output_path = os.path.join(output_dir, "test_bill.pdf")
 
     # Create PDF document
     doc = SimpleDocTemplate(output_path, pagesize=letter, compress=0)

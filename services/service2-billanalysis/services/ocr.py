@@ -76,22 +76,13 @@ class OCRService:
     # ── PDF to image conversion ────────────────────────────────────
 
     def _pdf_to_image_bytes(self, file_bytes: bytes) -> bytes:
-        """Convert first page of PDF to PNG for Textract."""
-        import io
+        """Convert first page of PDF to PNG for Textract (AnalyzeDocument requires image, not PDF)."""
+        import fitz  # PyMuPDF — self-contained, no system dependencies
 
-        try:
-            from pdf2image import convert_from_bytes
-
-            images = convert_from_bytes(file_bytes, dpi=300, first_page=1, last_page=1)
-            if not images:
-                return file_bytes
-            img_bytes = io.BytesIO()
-            images[0].save(img_bytes, format="PNG")
-            return img_bytes.getvalue()
-        except ImportError:
-            return file_bytes
-        except Exception:
-            return file_bytes
+        doc = fitz.open(stream=file_bytes, filetype="pdf")
+        page = doc[0]
+        pix = page.get_pixmap(dpi=300)
+        return pix.tobytes("png")
 
     # ── Textract block parsing ─────────────────────────────────────
 
