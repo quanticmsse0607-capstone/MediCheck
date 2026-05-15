@@ -1,34 +1,41 @@
 """
-OCR service — local PDF extraction using pdfplumber.
+OCR service — AWS Textract AnalyzeDocument API.
 
-Replaces AWS Textract with a free, local alternative.
-No API key or cloud account required.
+Replaces pdfplumber with ML-based extraction that handles any PDF layout
+including scanned documents, varied bill formats, and non-standard layouts.
 
-Fixes:
-  1. Provider name — skips document titles, finds hospital name correctly
-  2. Date — skips Bill Date/Service Period, uses first service date
-  3. Duplicate line items — text fallback only runs when tables produce nothing
-  4. Amounts — uses last dollar amount in row (Amount col, not Rate col)
+Textract free tier: 1,000 pages/month for 12 months.
+AWS credentials read from environment variables (NFR-07).
+
+CPT code descriptions are NEVER populated — AMA copyright (agreed decision).
 """
 
 import re
-import io
-import pdfplumber
+import boto3
+from flask import current_app
 
 
 class OCRService:
 
+    def __init__(self):
+        self._client = None
+
+    @property
+    def client(self):
+        if self._client is None:
+            self._client = boto3.client(
+                "textract",
+                region_name=current_app.config.get("AWS_REGION", "us-east-1"),
+                aws_access_key_id=current_app.config.get("AWS_ACCESS_KEY_ID"),
+                aws_secret_access_key=current_app.config.get("AWS_SECRET_ACCESS_KEY"),
+            )
+        return self._client
+
     def extract(self, file_bytes: bytes, source: str = "bill") -> dict:
         """
-        Extract structured data from a PDF using pdfplumber.
-
-        Args:
-            file_bytes: Raw PDF bytes.
-            source: 'bill' or 'eob' — tagged on every line item.
-
-        Returns:
-            dict with keys: patient_name, provider_name, date_of_service,
-            total_billed, line_items (list of dicts).
+        Extract structured data from a PDF using AWS Textract.
+        Automatically converts PDF to image first (required for ReportLab
+        and other vector PDFs that Textract cannot process directly).
         """
         result = {
             "patient_name": None,
@@ -38,60 +45,153 @@ class OCRService:
             "line_items": [],
         }
 
-        with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
-            full_text = ""
-            all_tables = []
+        textract_bytes = self._pdf_to_image_bytes(file_bytes)
 
-            for page in pdf.pages:
-                text = page.extract_text() or ""
-                full_text += text + "\n"
-                tables = page.extract_tables() or []
-                all_tables.extend(tables)
+        response = self.client.analyze_document(
+            Document={"Bytes": textract_bytes},
+            FeatureTypes=["TABLES", "FORMS"],
+        )
 
-            result["patient_name"] = self._extract_patient_name(full_text, all_tables)
-            result["provider_name"] = self._extract_provider_name(full_text, all_tables)
-            result["date_of_service"] = self._extract_date(full_text, all_tables)
-            result["total_billed"] = self._extract_total(full_text)
+        blocks = response.get("Blocks", [])
+        block_map = {b["Id"]: b for b in blocks}
 
-            # Only run text fallback if tables produced no line items
-            line_items = self._extract_line_items_from_tables(all_tables, source)
-            if not line_items:
-                line_items = self._extract_line_items_from_text(full_text, source)
-            result["line_items"] = line_items
+        kvs = self._extract_key_values(blocks, block_map)
+        tables = self._extract_tables(blocks, block_map)
+
+        lines = [b["Text"] for b in blocks if b["BlockType"] == "LINE"]
+        full_text = "\n".join(lines)
+
+        result["patient_name"] = self._find_patient_name(kvs, full_text)
+        result["provider_name"] = self._find_provider_name(kvs, full_text)
+        result["date_of_service"] = self._find_date(kvs, full_text)
+        result["total_billed"] = self._find_total(kvs, full_text)
+
+        line_items = self._extract_line_items_from_tables(tables, source)
+        if not line_items:
+            line_items = self._extract_line_items_from_text(full_text, source)
+        result["line_items"] = line_items
 
         return result
 
-    # ── Patient name ───────────────────────────────────────────────────────────
+    # ── PDF to image conversion ────────────────────────────────────
 
-    def _extract_patient_name(self, text: str, tables: list) -> str | None:
-        # First try labelled fields in tables (most reliable)
-        for table in tables:
-            for row in table:
-                cells = [str(c or "").strip() for c in row]
-                for i, cell in enumerate(cells):
-                    if re.match(r"patient(\s*name)?[:\s]*$", cell, re.IGNORECASE):
-                        if i + 1 < len(cells) and cells[i + 1]:
-                            words = cells[i + 1].split()[:3]
-                            return " ".join(words)
-                    if re.match(r"member(\s*name)?[:\s]*$", cell, re.IGNORECASE):
-                        if i + 1 < len(cells) and cells[i + 1]:
-                            words = cells[i + 1].split()[:3]
-                            return " ".join(words)
+    def _pdf_to_image_bytes(self, file_bytes: bytes) -> bytes:
+        """Convert first page of PDF to PNG for Textract."""
+        import io
 
-        # Text patterns — covers Patient:, Patient Name:, Member:, Beneficiary:, Insured:
-        # Stop at known non-name words
-        name_stop = r"(?:Svc|DOB|Date|Member|Group|Account|Plan|ID|Phone|\d)"
+        try:
+            from pdf2image import convert_from_bytes
+
+            images = convert_from_bytes(file_bytes, dpi=300, first_page=1, last_page=1)
+            if not images:
+                return file_bytes
+            img_bytes = io.BytesIO()
+            images[0].save(img_bytes, format="PNG")
+            return img_bytes.getvalue()
+        except ImportError:
+            return file_bytes
+        except Exception:
+            return file_bytes
+
+    # ── Textract block parsing ─────────────────────────────────────
+
+    def _extract_key_values(self, blocks, block_map) -> dict:
+        kvs = {}
+        key_blocks = [
+            b
+            for b in blocks
+            if b["BlockType"] == "KEY_VALUE_SET" and "KEY" in b.get("EntityTypes", [])
+        ]
+        for key_block in key_blocks:
+            key_text = self._get_text_from_relationships(key_block, block_map)
+            value_block = self._get_value_block(key_block, block_map)
+            if value_block:
+                value_text = self._get_text_from_relationships(value_block, block_map)
+                if key_text:
+                    kvs[key_text.strip().lower()] = value_text.strip()
+        return kvs
+
+    def _get_value_block(self, key_block, block_map):
+        for rel in key_block.get("Relationships", []):
+            if rel["Type"] == "VALUE":
+                for vid in rel["Ids"]:
+                    return block_map.get(vid)
+        return None
+
+    def _get_text_from_relationships(self, block, block_map) -> str:
+        text = ""
+        for rel in block.get("Relationships", []):
+            if rel["Type"] == "CHILD":
+                for cid in rel["Ids"]:
+                    child = block_map.get(cid, {})
+                    if child.get("BlockType") == "WORD":
+                        text += child.get("Text", "") + " "
+        return text.strip()
+
+    def _extract_tables(self, blocks, block_map) -> list:
+        tables = []
+        table_blocks = [b for b in blocks if b["BlockType"] == "TABLE"]
+        for table_block in table_blocks:
+            cells = {}
+            for rel in table_block.get("Relationships", []):
+                if rel["Type"] == "CHILD":
+                    for cid in rel["Ids"]:
+                        cell = block_map.get(cid, {})
+                        if cell.get("BlockType") == "CELL":
+                            row = cell.get("RowIndex", 0)
+                            col = cell.get("ColumnIndex", 0)
+                            text = self._get_text_from_relationships(cell, block_map)
+                            cells[(row, col)] = text
+            if not cells:
+                continue
+            max_row = max(r for r, c in cells)
+            max_col = max(c for r, c in cells)
+            table = []
+            for r in range(1, max_row + 1):
+                row = [cells.get((r, c), "") for c in range(1, max_col + 1)]
+                table.append(row)
+            tables.append(table)
+        return tables
+
+    # ── Field extraction ───────────────────────────────────────────
+
+    def _find_patient_name(self, kvs: dict, text: str) -> str | None:
+        name_keys = [
+            "patient name",
+            "patient",
+            "member name",
+            "member",
+            "beneficiary",
+            "insured",
+            "subscriber",
+        ]
+        for k in name_keys:
+            if k in kvs and kvs[k]:
+                words = kvs[k].split()[:3]
+                clean = []
+                stop = {
+                    "svc",
+                    "dob",
+                    "date",
+                    "member",
+                    "group",
+                    "account",
+                    "plan",
+                    "id",
+                    "phone",
+                }
+                for w in words:
+                    if w.lower() in stop:
+                        break
+                    clean.append(w)
+                if clean:
+                    return " ".join(clean)
         patterns = [
-            r"Patient\s*Name[:\s]+([A-Z][a-zA-Z-']+(?:\s+[A-Z][a-zA-Z-']+){1,3}?)(?:\s+"
-            + name_stop
-            + r"|$)",
-            r"Patient[:\s]+([A-Z][a-zA-Z-']+(?:\s+[A-Z][a-zA-Z-']+){1,3}?)(?:\s+"
-            + name_stop
-            + r"|$)",
-            r"Member\s*Name[:\s]+([A-Z][a-zA-Z-']+(?:\s+[A-Z][a-zA-Z-']+){1,3})",
-            r"Member[:\s]+([A-Z][a-zA-Z-']+(?:\s+[A-Z][a-zA-Z-']+){1,3})",
-            r"Beneficiary[:\s]+([A-Z][a-zA-Z-']+(?:\s+[A-Z][a-zA-Z-']+){1,3})",
-            r"Insured[:\s]+([A-Z][a-zA-Z-']+(?:\s+[A-Z][a-zA-Z-']+){1,3})",
+            r"Patient\s*Name[:\s]+([A-Z][a-zA-Z'-]+(?:\s+[A-Z][a-zA-Z'-]+){1,3})",
+            r"Patient[:\s]+([A-Z][a-zA-Z'-]+(?:\s+[A-Z][a-zA-Z'-]+){1,3})",
+            r"Member\s*Name[:\s]+([A-Z][a-zA-Z'-]+(?:\s+[A-Z][a-zA-Z'-]+){1,3})",
+            r"Member[:\s]+([A-Z][a-zA-Z'-]+(?:\s+[A-Z][a-zA-Z'-]+){1,3})",
+            r"Beneficiary[:\s]+([A-Z][a-zA-Z'-]+(?:\s+[A-Z][a-zA-Z'-]+){1,3})",
         ]
         for pattern in patterns:
             match = re.search(pattern, text)
@@ -100,16 +200,21 @@ class OCRService:
                 return " ".join(words)
         return None
 
-    # ── Provider name ──────────────────────────────────────────────────────────
+    def _find_provider_name(self, kvs: dict, text: str) -> str | None:
+        provider_keys = [
+            "provider",
+            "facility",
+            "hospital",
+            "provider name",
+            "facility name",
+            "billed by",
+            "from",
+        ]
+        for k in provider_keys:
+            if k in kvs and kvs[k]:
+                return kvs[k][:80]
 
-    def _extract_provider_name(self, text: str, tables: list) -> str | None:
-        """
-        Provider name appears as a standalone all-caps line near the top
-        e.g. METROPOLITAN HOSPITAL CENTER — not after a 'Provider:' label.
-        Skip generic document titles like 'HOSPITAL SERVICES BILL'.
-        """
-        # Words that indicate a document title, not a provider name
-        title_skip_words = [
+        title_skip = {
             "BILL",
             "INVOICE",
             "STATEMENT",
@@ -117,12 +222,8 @@ class OCRService:
             "EXPLANATION",
             "SUMMARY",
             "INFORMATION",
-            "NOTICE",
-            "RECEIPT",
-            "RECORD",
-        ]
-        # Words that indicate a real provider name
-        provider_keywords = [
+        }
+        provider_kw = [
             "HOSPITAL",
             "MEDICAL",
             "HEALTH",
@@ -133,55 +234,27 @@ class OCRService:
             "SURGERY",
             "ONCOLOGY",
             "CARDIOLOGY",
-            "ORTHOPEDIC",
         ]
 
         lines = [l.strip() for l in text.split("\n") if l.strip()]
-
-        # First pass — all-caps line with provider keyword, no title words
-        # Strip trailing date/phone/label that may appear on same line
         for line in lines[:15]:
             if len(line) < 5 or line.startswith("$"):
                 continue
-            # Strip common suffixes before evaluating
-            clean_line = line
+            clean = line
             for suffix in [
                 r"\s+Bill\s+Date.*",
                 r"\s+Phone.*",
                 r"\s+Fax.*",
-                r"\s+Tel.*",
-                r"\s+\d{3}[\s.-]\d{3}.*",
                 r"\s+\d{2}/\d{2}/\d{4}.*",
             ]:
-                import re as _re
-
-                clean_line = _re.split(suffix, clean_line, flags=_re.IGNORECASE)[0]
-            clean_line = clean_line.strip()
-            if clean_line != clean_line.upper():
+                clean = re.split(suffix, clean, flags=re.IGNORECASE)[0].strip()
+            if clean != clean.upper():
                 continue
-            if any(w in clean_line for w in title_skip_words):
+            if any(w in clean for w in title_skip):
                 continue
-            if any(w in clean_line for w in provider_keywords):
-                return clean_line[:80]
+            if any(w in clean for w in provider_kw):
+                return clean[:80]
 
-        # Second pass — mixed case with provider keyword, no colon
-        # Skip lines that look like service rows (start with date or contain $ amounts)
-        visit_skip = re.compile(
-            r"^(office\s+visit|lab\s+visit|date|svc|service|\d{1,2}/\d{1,2})",
-            re.IGNORECASE,
-        )
-        for line in lines[:20]:
-            if len(line) > 10 and ":" not in line and not line.startswith("$"):
-                if visit_skip.match(line):
-                    continue
-                # Skip lines with dollar amounts — service rows not provider names
-                if re.search(r"\$[\d,]+\.\d{2}", line):
-                    continue
-                if any(w in line.upper() for w in provider_keywords):
-                    if not any(w in line.upper() for w in title_skip_words):
-                        return line[:80]
-
-        # Third pass — "Visit to PROVIDER" pattern
         visit_match = re.search(
             r"(?:Office|Lab|Urgent Care|ER|Emergency)\s+Visit\s+to\s+([^\n]{5,60})",
             text,
@@ -190,42 +263,44 @@ class OCRService:
         if visit_match:
             return visit_match.group(1).strip()[:80]
 
-        # Fourth pass — labelled field
-        patterns = [
-            r"(?:Provider|Facility|Hospital)[:\s]+([A-Z][^\n]{5,60})",
-            r"(?:From|Billed\s+by)[:\s]+([A-Z][^\n]{5,60})",
-        ]
-        for pattern in patterns:
-            match = re.search(pattern, text, re.IGNORECASE)
-            if match:
-                return match.group(1).strip()[:80]
-
+        skip_re = re.compile(
+            r"^(office\s+visit|lab\s+visit|date|svc|\d{1,2}/\d{1,2})", re.IGNORECASE
+        )
+        for line in lines[:20]:
+            if len(line) > 10 and ":" not in line and not line.startswith("$"):
+                if skip_re.match(line):
+                    continue
+                if re.search(r"\$[\d,]+\.\d{2}", line):
+                    continue
+                if any(w in line.upper() for w in provider_kw):
+                    return line[:80]
         return None
 
-    # ── Date of service ────────────────────────────────────────────────────────
-
-    def _extract_date(self, text: str, tables: list) -> str | None:
-        """
-        Use first service date from the service table.
-        Skip: Bill Date, Service Period, Date of Birth, Account dates.
-        Handles: MM/DD/YYYY, MM-DD-YYYY, Month DD YYYY formats.
-        """
-        # Explicit label patterns first
-        explicit_patterns = [
-            r"Date\s*(?:of\s*Service|s\s*of\s*Service)[:\s]+(\w+ \d{1,2},?\s*\d{4})",
+    def _find_date(self, kvs: dict, text: str) -> str | None:
+        date_keys = [
+            "date of service",
+            "service date",
+            "dos",
+            "date(s) of service",
+            "dates of service",
+        ]
+        for k in date_keys:
+            if k in kvs and kvs[k]:
+                return kvs[k]
+        explicit = [
+            r"Date\s*(?:of\s*Service|s\s*of\s*Service)[:\s]+([\w]+ \d{1,2},?\s*\d{4})",
             r"Date\s*(?:of\s*Service|s\s*of\s*Service)[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
             r"Service\s+Date[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
             r"\bDOS[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
         ]
-        for pattern in explicit_patterns:
+        for pattern in explicit:
             match = re.search(pattern, text, re.IGNORECASE)
             if match:
                 return match.group(1).strip()
-
-        # Fallback — first date not on a skip line
-        skip_pattern = re.compile(
+        skip = re.compile(
             r"bill\s+date|date\s+of\s+birth|\bdob\b|service\s+period|"
-            r"\bbirth\b|account|period|through|thru|-\s+\d{2}/\d{2}/\d{4}",
+            r"\bbirth\b|account|period|through|thru|age\s+\d+|"
+            r"\b(19[5-9]\d|200\d|201\d)\b",
             re.IGNORECASE,
         )
         months = (
@@ -233,26 +308,34 @@ class OCRService:
             r"September|October|November|December"
         )
         for line in text.split("\n"):
-            if skip_pattern.search(line):
+            if skip.search(line):
                 continue
-            # MM/DD/YYYY format
-            date_match = re.search(r"\b(\d{2}/\d{2}/\d{4})\b", line)
-            if date_match:
-                return date_match.group(1)
-            # Month DD, YYYY format (e.g. November 29, 2021)
-            date_match = re.search(
+            m = re.search(r"\b(\d{2}/\d{2}/\d{4})\b", line)
+            if m:
+                return m.group(1)
+            m = re.search(
                 rf"\b({months})\s+\d{{1,2}},?\s*\d{{4}}\b",
                 line,
                 re.IGNORECASE,
             )
-            if date_match:
-                return date_match.group(0).strip()
-
+            if m:
+                return m.group(0).strip()
         return None
 
-    # ── Total billed ───────────────────────────────────────────────────────────
-
-    def _extract_total(self, text: str) -> float | None:
+    def _find_total(self, kvs: dict, text: str) -> float | None:
+        total_keys = [
+            "total charges",
+            "total billed",
+            "total amount",
+            "amount due",
+            "balance due",
+            "total",
+        ]
+        for k in total_keys:
+            if k in kvs and kvs[k]:
+                val = self._parse_amount(kvs[k])
+                if val and val > 0:
+                    return val
         patterns = [
             r"Total\s+Charges[:\s]+\$?([\d,]+\.\d{2})",
             r"Total\s+Billed[:\s]+\$?([\d,]+\.\d{2})",
@@ -268,17 +351,17 @@ class OCRService:
                     return val
         return None
 
-    # ── Line items from tables ─────────────────────────────────────────────────
+    # ── Line item extraction ───────────────────────────────────────
 
     def _extract_line_items_from_tables(self, tables: list, source: str) -> list:
         """
-        Extract line items from service charge tables only.
-        Uses last dollar amount per row (Amount column, not Rate column).
-        Deduplicates by CPT + date to prevent double extraction.
+        Extract line items from Textract TABLE blocks.
+        EOB: use first dollar amount (Billed column).
+        Bill: use last dollar amount (Amount column, after Rate column).
         """
         line_items = []
         line_number = 1
-        seen_cpt_dates = set()
+        seen = set()
 
         for table in tables:
             if not table:
@@ -286,7 +369,6 @@ class OCRService:
             if not self._is_service_table(table):
                 continue
 
-            # Skip header row
             rows = table[1:] if self._is_header_row(table[0]) else table
 
             for row in rows:
@@ -295,32 +377,37 @@ class OCRService:
 
                 cells = [str(c or "").strip() for c in row]
 
-                # Find CPT code — 5-digit number
+                # CPT code — 5-digit number
                 cpt_code = None
                 for cell in cells:
                     if re.match(r"^\d{5}$", cell):
                         cpt_code = cell
                         break
-
                 if not cpt_code:
                     continue
 
-                # Use LAST dollar amount (Amount col comes after Rate col)
+                # Collect all positive dollar amounts in the row
                 all_amounts = []
                 for cell in cells:
                     m = re.search(r"\$?([\d,]+\.\d{2})", cell)
                     if m:
-                        parsed = self._parse_amount(m.group(1))
-                        if parsed and parsed > 0:
-                            all_amounts.append(parsed)
-                amount = all_amounts[-1] if all_amounts else 0.0
+                        val = self._parse_amount(m.group(1))
+                        if val and val > 0:
+                            all_amounts.append(val)
+
+                # FIX: EOB uses first amount (Billed col)
+                #      Bill uses last amount (Amount col after Rate col)
+                if source == "eob":
+                    amount = all_amounts[0] if all_amounts else 0.0
+                else:
+                    amount = all_amounts[-1] if all_amounts else 0.0
 
                 # Date
                 date = None
                 for cell in cells:
-                    dm = re.search(r"\b(\d{1,2}/\d{1,2}/\d{4})\b", cell)
+                    dm = re.search(r"\b(\d{1,2}/\d{1,2}/\d{2,4})\b", cell)
                     if dm:
-                        date = dm.group(1)
+                        date = self._normalise_date(dm.group(1))
                         break
 
                 # Quantity
@@ -335,23 +422,22 @@ class OCRService:
                         except ValueError:
                             pass
 
-                # Network status (for EOB)
+                # Network status (EOB only)
                 network_status = "in-network"
                 for cell in cells:
                     if cell.upper() in ("OON", "OUT-OF-NETWORK", "NON-PARTICIPATING"):
                         network_status = "out-of-network"
                         break
 
-                # Deduplicate
-                dedup_key = (cpt_code, date or "nodate", source)
-                if dedup_key in seen_cpt_dates:
+                key = (cpt_code, date or "nodate")
+                if key in seen:
                     continue
-                seen_cpt_dates.add(dedup_key)
+                seen.add(key)
 
                 item = {
                     "line_number": line_number,
                     "cpt_code": cpt_code,
-                    "description": "",  # AMA copyright — never populated
+                    "description": "",
                     "quantity": quantity,
                     "amount": amount,
                     "date": date,
@@ -366,14 +452,11 @@ class OCRService:
 
         return line_items
 
-    # ── Line items from text (fallback only) ───────────────────────────────────
-
     def _extract_line_items_from_text(self, text: str, source: str) -> list:
         """
-        Text-only line item extraction for bills with no table structure.
-        Handles: 11/26/21 90471 Description ... 1 $57.00
-        Also handles 2-digit years (11/26/21 -> 11/26/2021).
-        Skips insurance payments and adjustments.
+        Fallback text extraction for bills with no table structure.
+        EOB: use first amount (Billed col).
+        Bill: use last amount (Amount col).
         """
         line_items = []
         line_number = 1
@@ -383,8 +466,6 @@ class OCRService:
             line = line.strip()
             if not line:
                 continue
-
-            # Skip insurance payment/adjustment lines
             if re.search(
                 r"insurance|adjustment|payment|contractual|\b2000\b|\b3000\b",
                 line,
@@ -395,35 +476,28 @@ class OCRService:
             cpt_match = re.search(r"\b(\d{5})\b", line)
             if not cpt_match:
                 continue
-
             cpt_code = cpt_match.group(1)
 
-            # Find all dollar amounts on this line
-            all_dollar_positions = [
-                (m.start(), m.group(1)) for m in re.finditer(r"\$([\d,]+\.\d{2})", line)
-            ]
-
-            # Keep only positive amounts (not preceded by minus)
-            positive_amounts = []
-            for pos, val in all_dollar_positions:
-                if pos > 0 and line[pos - 1] == "-":
+            # Collect positive dollar amounts
+            positive = []
+            for m in re.finditer(r"\$?([\d,]+\.\d{2})", line):
+                idx = m.start()
+                if idx > 0 and line[idx - 1] == "-":
                     continue
-                parsed = self._parse_amount(val)
-                if parsed and parsed > 0:
-                    positive_amounts.append(parsed)
+                val = self._parse_amount(m.group(1))
+                if val and val > 0:
+                    positive.append(val)
 
-            amount = positive_amounts[-1] if positive_amounts else 0.0
+            # FIX: EOB uses first amount, bill uses last amount
+            if source == "eob":
+                amount = positive[0] if positive else 0.0
+            else:
+                amount = positive[-1] if positive else 0.0
 
-            # Date — handle MM/DD/YY and MM/DD/YYYY
             date = None
-            date_match = re.search(r"\b(\d{1,2}/\d{1,2}/\d{2,4})\b", line)
-            if date_match:
-                date = date_match.group(1)
-                parts = date.split("/")
-                if len(parts) == 3 and len(parts[2]) == 2:
-                    yr = int(parts[2])
-                    parts[2] = str(2000 + yr) if yr <= 50 else str(1900 + yr)
-                    date = "/".join(parts)
+            dm = re.search(r"\b(\d{1,2}/\d{1,2}/\d{2,4})\b", line)
+            if dm:
+                date = self._normalise_date(dm.group(1))
 
             key = (cpt_code, date or "nodate")
             if key in seen:
@@ -449,37 +523,44 @@ class OCRService:
 
         return line_items
 
-    # ── Helpers ────────────────────────────────────────────────────────────────
+    # ── Helpers ────────────────────────────────────────────────────
 
     def _is_service_table(self, table: list) -> bool:
-        """Only process tables that look like service charge tables."""
         if not table or not table[0]:
             return False
-        header_text = " ".join(str(c or "").lower() for c in table[0])
-        has_cpt = any(w in header_text for w in ["cpt", "code", "procedure"])
-        has_amount = any(
-            w in header_text for w in ["amount", "charge", "billed", "bill"]
-        )
-        has_date = any(w in header_text for w in ["date", "svc dt", "svc", "dos"])
+        header = " ".join(str(c or "").lower() for c in table[0])
+        has_cpt = any(w in header for w in ["cpt", "code", "procedure"])
+        has_amount = any(w in header for w in ["amount", "charge", "billed", "bill"])
+        has_date = any(w in header for w in ["date", "svc dt", "svc", "dos"])
         return has_cpt and (has_amount or has_date)
 
     def _is_header_row(self, row: list) -> bool:
         if not row:
             return False
-        keywords = [
-            "date",
-            "service",
-            "cpt",
-            "code",
-            "description",
-            "amount",
-            "charge",
-            "units",
-            "rate",
-            "billed",
-        ]
-        row_text = " ".join(str(c or "").lower() for c in row)
-        return any(kw in row_text for kw in keywords)
+        text = " ".join(str(c or "").lower() for c in row)
+        return any(
+            w in text
+            for w in [
+                "date",
+                "service",
+                "cpt",
+                "code",
+                "description",
+                "amount",
+                "charge",
+                "units",
+                "rate",
+                "billed",
+            ]
+        )
+
+    def _normalise_date(self, date_str: str) -> str:
+        parts = date_str.split("/")
+        if len(parts) == 3 and len(parts[2]) == 2:
+            yr = int(parts[2])
+            parts[2] = str(2000 + yr) if yr <= 50 else str(1900 + yr)
+            return "/".join(parts)
+        return date_str
 
     def _parse_amount(self, value: str | None) -> float | None:
         if not value:
@@ -490,9 +571,9 @@ class OCRService:
         except ValueError:
             return None
 
-    def _estimate_confidence(self, cpt_code: str | None, amount: float | None) -> float:
+    def _estimate_confidence(self, cpt_code, amount) -> float:
         if cpt_code and amount and amount > 0:
-            return 0.92
+            return 0.95
         if cpt_code:
-            return 0.75
+            return 0.80
         return 0.50
