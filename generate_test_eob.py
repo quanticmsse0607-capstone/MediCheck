@@ -21,7 +21,9 @@ import os
 
 
 def create_sample_eob():
-    output_path = "/Users/shifalisrivastava/Documents/Capstone/MediCheck/test_eob.pdf"
+    output_dir = os.path.join(os.path.dirname(__file__), "test-data", "synthetic")
+    os.makedirs(output_dir, exist_ok=True)
+    output_path = os.path.join(output_dir, "test_eob.pdf")
 
     doc = SimpleDocTemplate(output_path, pagesize=letter)
     styles = getSampleStyleSheet()

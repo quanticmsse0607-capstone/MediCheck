@@ -32,7 +32,7 @@ class Config:
     # FIX H5: SERVICE3_URL no longer defaults to localhost silently in production
     # Empty string causes an immediate connection error rather than silent misrouting
     SERVICE3_URL = os.environ.get("SERVICE3_URL", "http://localhost:5002")
-    SERVICE3_TIMEOUT_SECONDS = 10  # NFR-18
+    SERVICE3_TIMEOUT_SECONDS = int(os.environ.get("SERVICE3_TIMEOUT_SECONDS", 30))
 
     # FIX H1: SERVICE2_BASE_URL no longer defaults to localhost:5000 silently
     SERVICE2_BASE_URL = os.environ.get("SERVICE2_BASE_URL", "http://localhost:5001")
