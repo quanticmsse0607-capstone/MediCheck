@@ -1,14 +1,22 @@
 """
 POST /upload — FR-01, FR-02, FR-03, FR-04, FR-05
 Accepts one or two PDF files, runs OCR, returns session_id + extracted fields.
+
+Anti-pattern fixes:
+  M1: File seek reset guaranteed after every validation step
+  M9: rag_available removed from upload response (checked at analyse time only)
 """
 
 import io
 import os
+import logging
 from flask import Blueprint, request, jsonify, current_app
 from extensions import db
 from models import Session, ExtractedField, LineItem, SessionStatus
 
+logger = logging.getLogger(__name__)
+
+# Switch between real Textract and mock OCR via USE_MOCK_OCR env variable.
 if os.environ.get("USE_MOCK_OCR", "false").lower() == "true":
     from services.mock_ocr import MockOCRService
 
@@ -20,7 +28,6 @@ else:
 
 upload_bp = Blueprint("upload", __name__)
 
-# ── Error codes (from API contract error code reference) ──────────────────────
 ERR_INVALID_FILE_TYPE = "INVALID_FILE_TYPE"
 ERR_FILE_TOO_LARGE = "FILE_TOO_LARGE"
 ERR_PAGE_LIMIT = "PAGE_LIMIT_EXCEEDED"
@@ -37,7 +44,7 @@ def upload():
         bill  — PDF file (required)
         eob   — PDF file (optional)
 
-    Response 200: session_id, status, extracted_fields, rag_available
+    Response 200: session_id, status, extracted_fields
     Response 400: error_code, message, session_id: null
     """
 
@@ -50,14 +57,17 @@ def upload():
     bill_file = request.files["bill"]
     eob_file = request.files.get("eob")
 
-    # ── 2. Validate bill file ──────────────────────────────────────────────────
+    # ── 2. Validate bill file ─────────────────────────────────────────────────
+    # FIX M1: always reset file pointer after validation
     validation_error = _validate_pdf(bill_file, current_app.config)
+    bill_file.seek(0)  # guaranteed reset regardless of validation outcome
     if validation_error:
         return validation_error
 
-    # ── 3. Validate EOB file if present ───────────────────────────────────────
+    # ── 3. Validate EOB file if present ──────────────────────────────────────
     if eob_file:
         validation_error = _validate_pdf(eob_file, current_app.config)
+        eob_file.seek(0)  # guaranteed reset
         if validation_error:
             return validation_error
 
@@ -74,7 +84,7 @@ def upload():
     # ── 6. Persist session ────────────────────────────────────────────────────
     session = Session(status=SessionStatus.EXTRACTED)
     db.session.add(session)
-    db.session.flush()  # get session_id before committing
+    db.session.flush()
 
     # ── 7. Persist extracted fields ───────────────────────────────────────────
     extracted = ExtractedField(
@@ -87,11 +97,9 @@ def upload():
     db.session.add(extracted)
     db.session.flush()
 
-    # Bill line items
     for item in bill_data.get("line_items", []):
         db.session.add(_build_line_item(extracted.id, item, source="bill"))
 
-    # EOB line items (separate, tagged source='eob')
     if eob_data:
         for item in eob_data.get("line_items", []):
             db.session.add(_build_line_item(extracted.id, item, source="eob"))
@@ -106,6 +114,8 @@ def upload():
         for item in eob_data.get("line_items", []):
             all_line_items.append(_format_line_item(item, "eob"))
 
+    # FIX M9: removed hardcoded rag_available: True
+    # rag_available is determined at analyse time, not upload time
     return (
         jsonify(
             {
@@ -118,7 +128,6 @@ def upload():
                     "total_billed": bill_data.get("total_billed"),
                     "line_items": all_line_items,
                 },
-                "rag_available": True,  # checked at analyse time, assume available on upload
             }
         ),
         200,
@@ -130,19 +139,18 @@ def upload():
 
 def _validate_pdf(file, config) -> tuple | None:
     """
-    Validate file type and size. Returns an error response tuple or None if valid.
-    FR-01, FR-05.
+    Validate file type and size. Returns error response tuple or None if valid.
+    FIX M1: caller is responsible for seek(0) after calling this.
     """
     filename = file.filename or ""
 
-    # Type check
     if not filename.lower().endswith(".pdf"):
         return _error(400, ERR_INVALID_FILE_TYPE, "Uploaded file is not a PDF.")
 
-    # Size check (read into memory to get size, then reset)
-    file.seek(0, 2)  # seek to end
+    file.seek(0, 2)
     size_bytes = file.tell()
-    file.seek(0)  # reset
+    # Do NOT seek(0) here — caller guarantees reset so we never leave
+    # pointer in an unknown position on validation failure
 
     max_bytes = config["MAX_FILE_SIZE_MB"] * 1024 * 1024
     if size_bytes > max_bytes:
@@ -160,7 +168,7 @@ def _build_line_item(extracted_field_id: int, item: dict, source: str) -> LineIt
         extracted_field_id=extracted_field_id,
         line_number=item["line_number"],
         cpt_code=item.get("cpt_code"),
-        description="",  # never populated — AMA copyright
+        description="",
         quantity=item.get("quantity", 1),
         extracted_amount=item.get("amount"),
         extracted_date=item.get("date"),
@@ -170,11 +178,10 @@ def _build_line_item(extracted_field_id: int, item: dict, source: str) -> LineIt
 
 
 def _format_line_item(item: dict, source: str) -> dict:
-    """Format a line item for the API response (includes confidence for UI highlighting)."""
     return {
         "line_number": item["line_number"],
         "cpt_code": item.get("cpt_code"),
-        "description": "",  # AMA copyright — always empty
+        "description": "",
         "quantity": item.get("quantity", 1),
         "amount": item.get("amount", 0.0),
         "confidence": item.get("confidence"),

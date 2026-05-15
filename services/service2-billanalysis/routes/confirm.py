@@ -1,12 +1,17 @@
 """
 POST /confirm — FR-06, FR-07, FR-08, FR-09
 Receives user-corrected field values, persists them, advances session status.
-Confidence scores are stripped before persisting (agreed decision in API contract).
+
+Anti-pattern fixes:
+  M2: Guard against extracted=None before querying LineItem
 """
 
+import logging
 from flask import Blueprint, request, jsonify
 from extensions import db
 from models import Session, ExtractedField, LineItem, SessionStatus
+
+logger = logging.getLogger(__name__)
 
 confirm_bp = Blueprint("confirm", __name__)
 
@@ -20,15 +25,6 @@ def confirm():
     Accept confirmed field values from the field confirmation UI.
     Persists corrected values while retaining originals for audit (FR-07).
     Advances session status from 'extracted' → 'confirmed'.
-
-    Request JSON:
-        session_id       — string (required)
-        confirmed_fields — object with patient_name, provider_name,
-                           date_of_service, total_billed, line_items[]
-
-    Response 200: session_id, status: 'confirmed'
-    Response 400: NOT_CONFIRMED (wrong session state)
-    Response 404: SESSION_NOT_FOUND
     """
 
     data = request.get_json(silent=True) or {}
@@ -59,7 +55,6 @@ def confirm():
     # ── 3. Update top-level confirmed fields ──────────────────────────────────
     extracted = ExtractedField.query.filter_by(session_id=session_id).first()
     if extracted:
-        # Overwrite with corrected values — originals in extracted_* columns are untouched
         if "patient_name" in confirmed:
             extracted.patient_name = confirmed["patient_name"]
         if "provider_name" in confirmed:
@@ -70,26 +65,32 @@ def confirm():
             extracted.total_billed = confirmed["total_billed"]
 
     # ── 4. Update corrected line item values ──────────────────────────────────
-    # Confidence scores are NOT accepted from the frontend (stripped — agreed decision)
+    # FIX M2: only query LineItem when extracted is not None,
+    # preventing NULL FK query that silently matches orphaned records
     confirmed_items = confirmed.get("line_items", [])
-    for confirmed_item in confirmed_items:
-        line_number = confirmed_item.get("line_number")
-        source = confirmed_item.get("source", "bill")
+    if extracted and confirmed_items:
+        for confirmed_item in confirmed_items:
+            line_number = confirmed_item.get("line_number")
+            source = confirmed_item.get("source", "bill")
 
-        line_item = LineItem.query.filter_by(
-            extracted_field_id=extracted.id if extracted else None,
-            line_number=line_number,
-            source=source,
-        ).first()
+            line_item = LineItem.query.filter_by(
+                extracted_field_id=extracted.id,  # safe — extracted is not None here
+                line_number=line_number,
+                source=source,
+            ).first()
 
-        if line_item:
-            if "amount" in confirmed_item:
-                line_item.corrected_amount = confirmed_item["amount"]
-            if "date" in confirmed_item:
-                line_item.corrected_date = confirmed_item["date"]
-            # cpt_code corrections accepted if user fixes an OCR misread
-            if "cpt_code" in confirmed_item:
-                line_item.cpt_code = confirmed_item["cpt_code"]
+            if line_item:
+                if "amount" in confirmed_item:
+                    line_item.corrected_amount = confirmed_item["amount"]
+                if "date" in confirmed_item:
+                    line_item.corrected_date = confirmed_item["date"]
+                if "cpt_code" in confirmed_item:
+                    line_item.cpt_code = confirmed_item["cpt_code"]
+    elif confirmed_items and not extracted:
+        logger.warning(
+            "Cannot update line items — no ExtractedField found for session=%s",
+            session_id,
+        )
 
     # ── 5. Advance session status ─────────────────────────────────────────────
     session.status = SessionStatus.CONFIRMED
