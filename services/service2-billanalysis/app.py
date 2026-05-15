@@ -45,6 +45,12 @@ def create_app(config_name: str = None) -> Flask:
     with app.app_context():
         db.create_all()
 
+    # FIX H1, H5: warn at startup if production config missing
+    if config_name == "production":
+        cfg = config[config_name]
+        if hasattr(cfg, "validate"):
+            cfg.validate()
+
     return app
 
 

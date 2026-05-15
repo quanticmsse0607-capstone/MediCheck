@@ -1,14 +1,23 @@
 """
 POST /analyse — FR-10, FR-16, NFR-01, NFR-02, NFR-17, NFR-18
 Runs all four detectors, calls Service 3 for explanations, returns results.
+
+Anti-pattern fixes:
+  H2: Delete + writes wrapped in try/except with explicit rollback
+  L3: Session status transition protected by rollback
+  M4: RAG explanation merge logs when error_id missing from explanations
+  M8: Failed detector logged with class name
 """
 
 import json
+import logging
 from flask import Blueprint, request, jsonify
 from extensions import db
 from models import Session, ExtractedField, LineItem, AnalysisResult, SessionStatus
 from services.engine import ErrorDetectionEngine
 from services.rag_client import RAGClient
+
+logger = logging.getLogger(__name__)
 
 analyse_bp = Blueprint("analyse", __name__)
 engine = ErrorDetectionEngine()
@@ -47,7 +56,7 @@ def analyse():
             session_id,
         )
 
-    # ── 2. Validate session state (NFR-17: HTTP 400 before confirmation) ──────
+    # ── 2. Validate session state (NFR-17) ────────────────────────────────────
     if not SessionStatus.can_transition_to(session.status, SessionStatus.ANALYSED):
         return _error(
             400,
@@ -80,6 +89,7 @@ def analyse():
     rag_available = rag_response["rag_available"]
 
     # ── 7. Merge explanations into errors payload ─────────────────────────────
+    # FIX M4: log when error_id is missing from explanations dict
     if rag_available:
         explanations = rag_response.get("explanations", {})
         for error in errors_payload:
@@ -87,6 +97,15 @@ def analyse():
             if eid in explanations:
                 error["explanation"] = explanations[eid].get("explanation")
                 error["citations"] = explanations[eid].get("citations", [])
+            else:
+                # RAG returned but did not include this error_id — log it
+                logger.warning(
+                    "RAG response missing explanation for error_id=%s session=%s",
+                    eid,
+                    session_id,
+                )
+                error["explanation"] = None
+                error["citations"] = []
     else:
         # Partial response — explanation: null, citations: [] (US-015 AC1)
         for error in errors_payload:
@@ -94,28 +113,49 @@ def analyse():
             error["citations"] = []
 
     # ── 8. Persist results ────────────────────────────────────────────────────
-    # Clear any previous results for this session (re-analyse scenario)
-    AnalysisResult.query.filter_by(session_id=session_id).delete()
+    # FIX H2: wrap delete + writes in try/except with explicit rollback
+    # FIX L3: rollback session status if commit fails
+    previous_status = session.status
+    try:
+        # Clear any previous results for this session (re-analyse scenario)
+        AnalysisResult.query.filter_by(session_id=session_id).delete()
 
-    for error in errors_payload:
-        db.session.add(
-            AnalysisResult(
-                session_id=session_id,
-                error_id=error["error_id"],
-                module=error["module"],
-                error_type=error["error_type"],
-                description=error["description"],
-                line_items_affected=json.dumps(error["line_items_affected"]),
-                estimated_dollar_impact=error["estimated_dollar_impact"],
-                confidence=error["confidence"],
-                explanation=error.get("explanation"),
-                citations=json.dumps(error.get("citations", [])),
+        for error in errors_payload:
+            db.session.add(
+                AnalysisResult(
+                    session_id=session_id,
+                    error_id=error["error_id"],
+                    module=error["module"],
+                    error_type=error["error_type"],
+                    description=error["description"],
+                    line_items_affected=json.dumps(error["line_items_affected"]),
+                    estimated_dollar_impact=error["estimated_dollar_impact"],
+                    confidence=error["confidence"],
+                    explanation=error.get("explanation"),
+                    citations=json.dumps(error.get("citations", [])),
+                )
             )
-        )
 
-    # ── 9. Advance session status ─────────────────────────────────────────────
-    session.status = SessionStatus.ANALYSED
-    db.session.commit()
+        # ── 9. Advance session status ─────────────────────────────────────────
+        session.status = SessionStatus.ANALYSED
+        db.session.commit()
+
+    except Exception as exc:
+        # FIX H2 + L3: rollback everything — no partial state
+        db.session.rollback()
+        session.status = previous_status
+        logger.error(
+            "Failed to persist analysis results for session=%s: %s",
+            session_id,
+            exc,
+            exc_info=True,
+        )
+        return _error(
+            500,
+            "PERSIST_FAILED",
+            "Analysis completed but results could not be saved. " "Please try again.",
+            session_id,
+        )
 
     # ── 10. Build response ────────────────────────────────────────────────────
     total_savings = round(sum(e["estimated_dollar_impact"] for e in errors_payload), 2)
@@ -145,16 +185,18 @@ def _load_confirmed_fields(session_id: str) -> dict:
     if not extracted:
         return {"line_items": []}
 
+    # FIX M2: guard against extracted=None before querying LineItem
     line_items = []
     for li in LineItem.query.filter_by(extracted_field_id=extracted.id).all():
         line_items.append(
             {
                 "line_number": li.line_number,
                 "cpt_code": li.cpt_code,
-                "amount": li.amount,  # uses corrected if available (model property)
+                "amount": li.amount,
                 "date": li.corrected_date or li.extracted_date,
                 "quantity": li.quantity,
                 "source": li.source,
+                "network_status": getattr(li, "network_status", None),
             }
         )
 
