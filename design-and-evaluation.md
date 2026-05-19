@@ -184,6 +184,12 @@ Two CMS "What You Need to Know" HTML pages were initially considered for the kno
 **CMS NCCI Chapter 1 added (not in original DevGuide KB list)**
 The DevGuide did not specify a source for duplicate charge (Module 1) explanations. The AMA CPT guidelines — the authoritative source for duplicate billing rules — are copyright-protected and cannot be included. CMS NCCI Chapter 1 (General Correct Coding Policies, 2026) is a public-domain government document that establishes Medicare correct coding principles including the prohibition on billing the same service more than once per encounter. It was added to the knowledge base during Sprint 5 after the evaluation revealed a KB gap for Module 1.
 
+**Module-specific prompt engineering for Medicare Rate Outlier (post-evaluation improvement)**
+Post-evaluation review revealed that the generic `EXPLAIN_PROMPT` produced Medicare rate outlier explanations that restated figures already visible in the error description (billed amount, Medicare rate, percentage ratio, 300% threshold), adding length without adding information. A dedicated `EXPLAIN_PROMPT_MEDICARE` was introduced for `medicare_rate_outlier` errors. The revised prompt explicitly instructs the model not to repeat those figures, and instead to explain in plain prose: (1) how the CMS Physician Fee Schedule establishes the expected payment amount using RVUs, geographic pricing cost indices (GPCIs), and the conversion factor; (2) why a charge significantly above that calculated rate may indicate overbilling; and (3) one concrete dispute step for the patient. `max_tokens` was increased from 300 to 500 to accommodate the richer formula explanation without truncation.
+
+**Shared module-level explanation for duplicate module types**
+When a bill contains multiple errors of the same module type (e.g., two `medicare_rate_outlier` flags), the original per-error approach generated near-identical explanations with minor wording variation — potentially confusing patients who see two adjacent cards with slightly different but equivalent regulatory text. A `SHARED_EXPLANATION_MODULES` set and a dedicated `explain_module_context()` function were introduced in `chain.py`. For modules in this set, a single LLM call generates one module-level explanation (without referencing specific CPT codes or amounts) and that result is assigned identically to all error cards of that module. The error description on each card still shows the CPT-specific figures; the shared explanation provides the regulatory context once, consistently. All other modules continue through the existing per-error parallel path unchanged.
+
 ---
 
 ### Evaluation Methodology
@@ -338,6 +344,8 @@ Initial evaluation revealed a systematic KB gap: all four duplicate charge cases
 #### Module 2 — Medicare Rate Outlier
 
 All four cases cited the CMS Physician Fee Schedule methodology document at the correct formula section. The RVU26B-only source filter worked correctly — no cross-module bleed. 4/4 yes.
+
+**Post-evaluation prompt improvement:** The formal evaluation confirmed groundedness (100/100 across all four cases) but review of the live UI revealed a quality issue separate from grounding: the explanations restated figures already shown in the error description card, and referenced the RVU formula only vaguely ("calculated based on various components"). The prompt was revised post-evaluation to skip restatement of description figures and deliver the fee schedule formula context — RVUs, GPCIs, and the conversion factor — in plain conversational prose. The formal evaluation scores are unchanged (no re-run); the improvement addresses explanation clarity and patient readability, not factual accuracy.
 
 #### Module 3 — EOB Reconciliation
 

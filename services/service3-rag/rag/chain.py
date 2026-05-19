@@ -275,7 +275,9 @@ def explain_module_context(module: str) -> dict:
         raise RuntimeError("RAG chain is not initialized. Call init_chain(app) first.")
 
     allowed_sources = MODULE_SOURCE_ALLOWLIST.get(module)
-    query = "Medicare physician fee schedule RVU conversion factor payment rate calculation"
+    query = (
+        "Medicare physician fee schedule RVU conversion factor payment rate calculation"
+    )
     source_filter = (
         {"document_title": {"$in": allowed_sources}} if allowed_sources else None
     )

@@ -108,7 +108,9 @@ def explain():
     explanations: dict[str, dict] = {}
 
     # ── Shared module explanations — one LLM call per module type ────────────
-    unique_shared = {e["module"] for e in errors if e["module"] in SHARED_EXPLANATION_MODULES}
+    unique_shared = {
+        e["module"] for e in errors if e["module"] in SHARED_EXPLANATION_MODULES
+    }
     for module in unique_shared:
         try:
             shared = explain_module_context(module)
@@ -124,7 +126,8 @@ def explain():
 
     # ── Per-error explanations — parallel, skips shared-module errors ─────────
     individual = [
-        (i, e) for i, e in enumerate(errors)
+        (i, e)
+        for i, e in enumerate(errors)
         if e["module"] not in SHARED_EXPLANATION_MODULES
     ]
 
@@ -143,8 +146,13 @@ def explain():
                     logger.exception("RAG chain not ready")
                     return jsonify({"error": str(exc)}), 503
                 except Exception as exc:
-                    logger.exception("RAG chain error for future index %d", futures[future])
-                    return jsonify({"error": "RAG chain error.", "detail": str(exc)}), 500
+                    logger.exception(
+                        "RAG chain error for future index %d", futures[future]
+                    )
+                    return (
+                        jsonify({"error": "RAG chain error.", "detail": str(exc)}),
+                        500,
+                    )
                 explanations[error_id] = {
                     "explanation": result["explanation"],
                     "citations": result["citations"],

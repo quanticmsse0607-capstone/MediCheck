@@ -213,7 +213,10 @@ class TestExplainModuleContext:
 
         result = explain_module_context("medicare_rate_outlier")
 
-        assert result["explanation"] == "The fee schedule uses RVUs and a conversion factor."
+        assert (
+            result["explanation"]
+            == "The fee schedule uses RVUs and a conversion factor."
+        )
         assert len(result["citations"]) == 1
         assert "CMS Physician Fee Schedule" in result["citations"][0]["source"]
 

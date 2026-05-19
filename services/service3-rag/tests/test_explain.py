@@ -49,7 +49,9 @@ VALID_MEDICARE_ERROR_2 = {
 
 MOCK_MODULE_RESULT = {
     "explanation": "The CMS Physician Fee Schedule uses RVUs and a conversion factor.",
-    "citations": [{"source": "CMS Physician Fee Schedule 2026", "section": "p. 1", "url": None}],
+    "citations": [
+        {"source": "CMS Physician Fee Schedule 2026", "section": "p. 1", "url": None}
+    ],
 }
 
 
@@ -134,8 +136,9 @@ def test_explain_session_id_optional(client):
 
 def test_explain_shared_module_uses_module_context_not_detection(client):
     """medicare_rate_outlier errors use explain_module_context, not explain_detection."""
-    with patch("routes.explain.explain_module_context", return_value=MOCK_MODULE_RESULT) as mock_ctx, \
-         patch("routes.explain.explain_detection") as mock_detect:
+    with patch(
+        "routes.explain.explain_module_context", return_value=MOCK_MODULE_RESULT
+    ) as mock_ctx, patch("routes.explain.explain_detection") as mock_detect:
         response = client.post(
             "/explain",
             json={"session_id": "test-123", "errors": [VALID_MEDICARE_ERROR_1]},
@@ -147,7 +150,9 @@ def test_explain_shared_module_uses_module_context_not_detection(client):
 
 def test_explain_shared_module_called_once_for_multiple_errors(client):
     """explain_module_context is called exactly once even when two medicare errors are present."""
-    with patch("routes.explain.explain_module_context", return_value=MOCK_MODULE_RESULT) as mock_ctx:
+    with patch(
+        "routes.explain.explain_module_context", return_value=MOCK_MODULE_RESULT
+    ) as mock_ctx:
         response = client.post(
             "/explain",
             json={
@@ -161,7 +166,9 @@ def test_explain_shared_module_called_once_for_multiple_errors(client):
 
 def test_explain_shared_module_explanation_identical_across_errors(client):
     """Both medicare errors receive the same explanation text and citations."""
-    with patch("routes.explain.explain_module_context", return_value=MOCK_MODULE_RESULT):
+    with patch(
+        "routes.explain.explain_module_context", return_value=MOCK_MODULE_RESULT
+    ):
         response = client.post(
             "/explain",
             json={
@@ -177,8 +184,11 @@ def test_explain_shared_module_explanation_identical_across_errors(client):
 def test_explain_mixed_modules_routes_correctly(client):
     """Medicare error uses explain_module_context; non-medicare error uses explain_detection."""
     mock_detect_result = {**VALID_ERROR, **MOCK_EXPLANATION}
-    with patch("routes.explain.explain_module_context", return_value=MOCK_MODULE_RESULT) as mock_ctx, \
-         patch("routes.explain.explain_detection", return_value=mock_detect_result) as mock_detect:
+    with patch(
+        "routes.explain.explain_module_context", return_value=MOCK_MODULE_RESULT
+    ) as mock_ctx, patch(
+        "routes.explain.explain_detection", return_value=mock_detect_result
+    ) as mock_detect:
         response = client.post(
             "/explain",
             json={
