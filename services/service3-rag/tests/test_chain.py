@@ -35,6 +35,8 @@ def _reset_chain_singletons():
 
     chain_module._vectorstore = None
     chain_module._chain = None
+    chain_module._medicare_chain = None
+    chain_module._medicare_module_chain = None
     chain_module._letter_chain = None
 
 
@@ -176,6 +178,74 @@ class TestExplainDetection:
         assert result["error_id"] == "err_001"
         assert result["module"] == "duplicate_charge"
         assert result["estimated_dollar_impact"] == 150.0
+
+
+# ── explain_module_context() ─────────────────────────────────────────────────
+
+
+class TestExplainModuleContext:
+
+    def setup_method(self):
+        _reset_chain_singletons()
+
+    def test_raises_when_not_initialized(self):
+        from rag.chain import explain_module_context
+
+        with pytest.raises(RuntimeError, match="not initialized"):
+            explain_module_context("medicare_rate_outlier")
+
+    def test_returns_explanation_and_citations(self):
+        import rag.chain as chain_module
+
+        mock_doc = _make_doc(
+            "CMS Physician Fee Schedule: File Layout and Rate Calculation Methodology (2026)",
+            "RVU Calculation",
+            3,
+        )
+        chain_module._vectorstore = MagicMock()
+        chain_module._vectorstore.similarity_search.return_value = [mock_doc]
+        chain_module._medicare_module_chain = MagicMock()
+        chain_module._medicare_module_chain.invoke.return_value = (
+            "The fee schedule uses RVUs and a conversion factor."
+        )
+
+        from rag.chain import explain_module_context
+
+        result = explain_module_context("medicare_rate_outlier")
+
+        assert result["explanation"] == "The fee schedule uses RVUs and a conversion factor."
+        assert len(result["citations"]) == 1
+        assert "CMS Physician Fee Schedule" in result["citations"][0]["source"]
+
+    def test_uses_module_allowlist_filter(self):
+        import rag.chain as chain_module
+
+        chain_module._vectorstore = MagicMock()
+        chain_module._vectorstore.similarity_search.return_value = []
+        chain_module._medicare_module_chain = MagicMock()
+        chain_module._medicare_module_chain.invoke.return_value = "Explanation."
+
+        from rag.chain import explain_module_context
+
+        explain_module_context("medicare_rate_outlier")
+
+        call_kwargs = chain_module._vectorstore.similarity_search.call_args.kwargs
+        assert "filter" in call_kwargs
+        assert call_kwargs["filter"] is not None
+
+    def test_unknown_module_skips_retrieval(self):
+        import rag.chain as chain_module
+
+        chain_module._vectorstore = MagicMock()
+        chain_module._medicare_module_chain = MagicMock()
+        chain_module._medicare_module_chain.invoke.return_value = "No guidance."
+
+        from rag.chain import explain_module_context
+
+        result = explain_module_context("unknown_module")
+
+        chain_module._vectorstore.similarity_search.assert_not_called()
+        assert result["citations"] == []
 
 
 # ── draft_letter_content() ────────────────────────────────────────────────────

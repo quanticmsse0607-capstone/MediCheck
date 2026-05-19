@@ -27,6 +27,32 @@ MOCK_EXPLANATION = {
 }
 
 
+VALID_MEDICARE_ERROR_1 = {
+    "error_id": "err_med_001",
+    "module": "medicare_rate_outlier",
+    "error_type": "Medicare Rate Outlier",
+    "description": "CPT 99215 is billed at $650.00, which is 793% of the Medicare rate of $82.00.",
+    "line_items_affected": [9],
+    "estimated_dollar_impact": 568.0,
+    "confidence": "high",
+}
+
+VALID_MEDICARE_ERROR_2 = {
+    "error_id": "err_med_002",
+    "module": "medicare_rate_outlier",
+    "error_type": "Medicare Rate Outlier",
+    "description": "CPT 99282 is billed at $850.00, which is 1809% of the Medicare rate of $47.00.",
+    "line_items_affected": [1],
+    "estimated_dollar_impact": 803.0,
+    "confidence": "high",
+}
+
+MOCK_MODULE_RESULT = {
+    "explanation": "The CMS Physician Fee Schedule uses RVUs and a conversion factor.",
+    "citations": [{"source": "CMS Physician Fee Schedule 2026", "section": "p. 1", "url": None}],
+}
+
+
 # ── Valid requests ────────────────────────────────────────────────────────────
 
 
@@ -101,6 +127,71 @@ def test_explain_session_id_optional(client):
     with patch("routes.explain.explain_detection", return_value=mock_result):
         response = client.post("/explain", json={"errors": [VALID_ERROR]})
     assert response.status_code == 200
+
+
+# ── Shared module explanations ────────────────────────────────────────────────
+
+
+def test_explain_shared_module_uses_module_context_not_detection(client):
+    """medicare_rate_outlier errors use explain_module_context, not explain_detection."""
+    with patch("routes.explain.explain_module_context", return_value=MOCK_MODULE_RESULT) as mock_ctx, \
+         patch("routes.explain.explain_detection") as mock_detect:
+        response = client.post(
+            "/explain",
+            json={"session_id": "test-123", "errors": [VALID_MEDICARE_ERROR_1]},
+        )
+    assert response.status_code == 200
+    mock_ctx.assert_called_once()
+    mock_detect.assert_not_called()
+
+
+def test_explain_shared_module_called_once_for_multiple_errors(client):
+    """explain_module_context is called exactly once even when two medicare errors are present."""
+    with patch("routes.explain.explain_module_context", return_value=MOCK_MODULE_RESULT) as mock_ctx:
+        response = client.post(
+            "/explain",
+            json={
+                "session_id": "test-123",
+                "errors": [VALID_MEDICARE_ERROR_1, VALID_MEDICARE_ERROR_2],
+            },
+        )
+    assert response.status_code == 200
+    mock_ctx.assert_called_once_with("medicare_rate_outlier")
+
+
+def test_explain_shared_module_explanation_identical_across_errors(client):
+    """Both medicare errors receive the same explanation text and citations."""
+    with patch("routes.explain.explain_module_context", return_value=MOCK_MODULE_RESULT):
+        response = client.post(
+            "/explain",
+            json={
+                "session_id": "test-123",
+                "errors": [VALID_MEDICARE_ERROR_1, VALID_MEDICARE_ERROR_2],
+            },
+        )
+    data = response.get_json()["explanations"]
+    assert data["err_med_001"]["explanation"] == data["err_med_002"]["explanation"]
+    assert data["err_med_001"]["citations"] == data["err_med_002"]["citations"]
+
+
+def test_explain_mixed_modules_routes_correctly(client):
+    """Medicare error uses explain_module_context; non-medicare error uses explain_detection."""
+    mock_detect_result = {**VALID_ERROR, **MOCK_EXPLANATION}
+    with patch("routes.explain.explain_module_context", return_value=MOCK_MODULE_RESULT) as mock_ctx, \
+         patch("routes.explain.explain_detection", return_value=mock_detect_result) as mock_detect:
+        response = client.post(
+            "/explain",
+            json={
+                "session_id": "test-123",
+                "errors": [VALID_MEDICARE_ERROR_1, VALID_ERROR],
+            },
+        )
+    assert response.status_code == 200
+    mock_ctx.assert_called_once_with("medicare_rate_outlier")
+    mock_detect.assert_called_once()
+    data = response.get_json()["explanations"]
+    assert "err_med_001" in data
+    assert "err_001" in data
 
 
 # ── Validation errors ─────────────────────────────────────────────────────────
