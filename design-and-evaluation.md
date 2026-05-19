@@ -15,6 +15,7 @@ Service 1 is a React single-page application (SPA) that provides a user-friendly
 - API client: Centralised `medicheck.js` module
 - Session management: URL-based (sessionId in path), stateless frontend
 - Deployment: Render (static site), environment variable for API endpoint
+- Configurable env vars: `VITE_API_BASE_URL` (Service 2 endpoint), `VITE_DATA_DISCLAIMER` (footer disclaimer text — defaults to synthetic-data notice)
 
 ---
 
@@ -34,7 +35,9 @@ Service 1 implements a **4-screen linear workflow** with stateless, URL-driven r
 
 3. **Error Report (/report/:sessionId)** — Displays all detected billing errors
    - `POST /analyse` triggered if not yet run; displays results immediately
-   - Error cards show: error type, description, estimated dollar impact, severity badge (high/medium/low)
+   - Error cards show: severity badge, module name, estimated savings (labelled), error type, description, and affected line items
+   - Each card has a toggleable "Show explanation & citations" section — expands to show the RAG-generated plain-English explanation and source citations from the knowledge base
+   - If Service 3 is unavailable, an amber banner is shown with a Retry button; cards show "Explanation temporarily unavailable"
    - Cards styled by severity (red, amber, green)
    - "Generate Dispute Letter" button triggers `POST /letter` → navigates to `/letter/{sessionId}`
 
@@ -80,7 +83,7 @@ All frontend→Service 2 calls go through `medicheck.js`:
 | `/letter` | POST | Generate dispute letter (DOCX/PDF) | ErrorReport.jsx & DisputeLetter.jsx |
 | `/report` | GET | Retrieve analysis results (internal fallback) | ErrorReport.jsx |
 
-**Error handling:** All network errors throw `ApiError` with structured error code, message, and HTTP status. Components catch and display user-friendly messages (e.g., "Upload failed. Please check your connection."). HTTP 200 responses are treated as success even if `rag_available: false` — the frontend gracefully degrades (shows "RAG unavailable; error explanations may be generic").
+**Error handling:** All network errors throw `ApiError` with structured error code, message, and HTTP status. `response.json()` is wrapped in try/catch — if a gateway returns an HTML error page (e.g., Render 502), the parse failure is caught and surfaced as a structured `ApiError` rather than crashing the UI. Components catch and display user-friendly messages (e.g., "Upload failed. Please check your connection."). HTTP 200 responses are treated as success even if `rag_available: false` — the frontend degrades gracefully: an amber banner appears on the Error Report screen with a Retry button, and each error card shows "Explanation temporarily unavailable" in place of the RAG explanation.
 
 **Multipart form data:** Only `/upload` uses multipart; all others use JSON.
 
@@ -120,7 +123,7 @@ All frontend→Service 2 calls go through `medicheck.js`:
 - **Semantic HTML:** Form inputs use `<input>`, `<label>` correctly; error messages are associated with inputs via `aria-describedby` pattern (implicit)
 - **Mobile-first approach:** Base styles are mobile; desktop styles layer on top with breakpoints
 - **Colour contrast:** All text meets WCAG AA (Tailwind defaults are compliant)
-- **No client-side validation:** Validation is server-side (Service 2); frontend only displays errors returned by API
+- **Client-side validation:** Required fields (patient name, provider name, date of service) block submission if empty. `total_billed` is validated as a numeric value before submission — non-numeric input shows an inline error rather than silently coercing to 0. All other validation (business rules, duplicate detection) is server-side in Service 2.
 
 ---
 
@@ -131,8 +134,18 @@ All frontend→Service 2 calls go through `medicheck.js`:
 Service 3 is a stateless Flask microservice responsible for generating plain-English explanations of detected billing errors and producing formal dispute letter content. It uses a Retrieval-Augmented Generation (RAG) pipeline built on LangChain, ChromaDB, and GPT-4o-mini. All traffic is internal — Service 2 calls Service 3 after running its four detection modules.
 
 **Endpoints:**
+- `GET /health` — liveness check; returns `{ "status": "ok", "rag_ready": true/false }`. Called by Service 2 at upload time to set the `rag_available` flag.
 - `POST /explain` — receives a list of detected errors, returns a grounded explanation and citations per error
 - `POST /draft-letter` — receives the full analysis payload, returns a formal dispute paragraph
+
+**Configurable env vars:**
+
+| Variable | Purpose | Default |
+|---|---|---|
+| `OPENAI_API_KEY` | OpenAI API authentication | — (required) |
+| `OPENAI_MODEL` | LLM model name | `gpt-4o-mini` |
+| `CHROMA_PERSIST_PATH` | Path to ChromaDB persistence directory | `./data/chroma_db` |
+| `RAG_TOP_K` | Number of chunks retrieved per query | `3` |
 
 ---
 
@@ -186,6 +199,9 @@ The DevGuide did not specify a source for duplicate charge (Module 1) explanatio
 
 **Module-specific prompt engineering for Medicare Rate Outlier (post-evaluation improvement)**
 Post-evaluation review revealed that the generic `EXPLAIN_PROMPT` produced Medicare rate outlier explanations that restated figures already visible in the error description (billed amount, Medicare rate, percentage ratio, 300% threshold), adding length without adding information. A dedicated `EXPLAIN_PROMPT_MEDICARE` was introduced for `medicare_rate_outlier` errors. The revised prompt explicitly instructs the model not to repeat those figures, and instead to explain in plain prose: (1) how the CMS Physician Fee Schedule establishes the expected payment amount using RVUs, geographic pricing cost indices (GPCIs), and the conversion factor; (2) why a charge significantly above that calculated rate may indicate overbilling; and (3) one concrete dispute step for the patient. `max_tokens` was increased from 300 to 500 to accommodate the richer formula explanation without truncation.
+
+**Parallel LLM calls for `/explain`**
+Each error in a `/explain` request requires a separate OpenAI call (~5–9s each). Processing errors sequentially caused total latency to scale linearly with error count — a 4-error bill took 30–40s, exceeding the Service 2 timeout. Errors are now processed in parallel using `concurrent.futures.ThreadPoolExecutor` (capped at 5 workers). Total latency is now approximately one LLM call duration regardless of error count. Errors belonging to `SHARED_EXPLANATION_MODULES` (currently `medicare_rate_outlier`) are handled outside the thread pool — one shared call is made before the parallel loop runs.
 
 **Shared module-level explanation for duplicate module types**
 When a bill contains multiple errors of the same module type (e.g., two `medicare_rate_outlier` flags), the original per-error approach generated near-identical explanations with minor wording variation — potentially confusing patients who see two adjacent cards with slightly different but equivalent regulatory text. A `SHARED_EXPLANATION_MODULES` set and a dedicated `explain_module_context()` function were introduced in `chain.py`. For modules in this set, a single LLM call generates one module-level explanation (without referencing specific CPT codes or amounts) and that result is assigned identically to all error cards of that module. The error description on each card still shows the CPT-specific figures; the shared explanation provides the regulatory context once, consistently. All other modules continue through the existing per-error parallel path unchanged.
@@ -248,7 +264,7 @@ Results are written to `tests/eval_results.csv`. Citation accuracy and notes are
 | Citation accuracy (yes + partial) | 15 / 16 = **94%** |
 | Citation accuracy (yes only) | 13 / 16 = **81%** |
 
-**Latency note:** The p95 of 8 863 ms is driven by a single outlier call (eval_010, 8 863 ms). The remaining 15 calls ranged from 4 062 ms to 5 823 ms. p50 of 4 988 ms is the more representative figure for typical request latency. All calls completed within the 10-second timeout.
+**Latency note:** The p95 of 8 863 ms is driven by a single outlier call (eval_010, 8 863 ms). The remaining 15 calls ranged from 4 062 ms to 5 823 ms. p50 of 4 988 ms is the more representative figure for typical request latency. All calls completed within the 10-second timeout. These figures reflect single-error evaluation cases measured before parallelisation was introduced. For multi-error bills, the `ThreadPoolExecutor` implementation means total latency is now approximately one LLM call duration regardless of error count.
 
 **Groundedness outlier:** eval_009 scored 50/100. The judge flagged that the explanation invokes the No Surprises Act's qualifying payment amount (QPA) provision without clearly establishing its relevance to an in-network amount mismatch scenario. Dollar figures are correct. See Module 3 findings below.
 
@@ -278,6 +294,8 @@ Results are written to `tests/eval_results.csv`. Citation accuracy and notes are
 ### Example Evaluation Cases
 
 #### Module 2 (Medicare Rate Outlier) — eval_005
+
+> **Note:** This example shows the pre-improvement output from the formal evaluation run. The Medicare rate outlier prompt was subsequently revised to focus on RVU/GPCI formula context rather than restating figures already present in the error description. The groundedness and citation scores remain valid for the evaluated version.
 
 **Input payload:**
 - CPT 99213 (office visit)
