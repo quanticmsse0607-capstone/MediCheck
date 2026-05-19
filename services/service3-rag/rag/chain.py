@@ -66,6 +66,34 @@ Base your answer only on the provided context. If the context does not address t
 Do not speculate beyond what the context supports."""
 )
 
+EXPLAIN_PROMPT_MEDICARE = ChatPromptTemplate.from_template(
+    """You are a medical billing compliance expert helping a patient understand a potential error on their bill.
+
+Error type: {error_type}
+Detected issue: {description}
+
+Relevant regulatory and coding guidance:
+{context}
+
+The detected issue above already states the billed amount, the Medicare reference rate, the percentage ratio, and the outlier threshold — do not repeat any of these figures or thresholds.
+Write 3-5 sentences of plain conversational prose explaining: how the CMS Physician Fee Schedule establishes the expected payment amount using RVUs and the conversion factor (citing specific values from the context where available); why a charge this far above that calculated rate may indicate overbilling; and one concrete step the patient can take to dispute the charge.
+Base your answer only on the provided context. If the context does not address the error, say so briefly.
+Do not speculate beyond what the context supports."""
+)
+
+EXPLAIN_MODULE_PROMPT_MEDICARE = ChatPromptTemplate.from_template(
+    """You are a medical billing compliance expert helping a patient understand a potential error on their bill.
+
+Error type: {error_type}
+
+Relevant regulatory and coding guidance:
+{context}
+
+Write 3-5 sentences of plain conversational prose explaining: how the CMS Physician Fee Schedule establishes the expected payment amount using RVUs and the conversion factor (citing specific values from the context where available); why charges significantly above the Medicare rate may indicate overbilling; and one concrete step the patient can take to dispute such a charge.
+Base your answer only on the provided context. If the context does not address the error, say so briefly.
+Do not speculate beyond what the context supports."""
+)
+
 LETTER_PROMPT = ChatPromptTemplate.from_template(
     """You are a medical billing compliance expert drafting a formal dispute paragraph for a patient's billing dispute letter.
 
@@ -92,6 +120,8 @@ Write only the paragraph text. Do not include a salutation, subject line, or clo
 _vectorstore = None
 _top_k: int = 3
 _chain = None
+_medicare_chain = None
+_medicare_module_chain = None
 _letter_chain = None
 
 
@@ -110,7 +140,7 @@ def init_chain(app) -> None:
     Initialize the RAG vectorstore and LCEL chain from Flask app config.
     Must be called once during app startup (from create_app).
     """
-    global _vectorstore, _top_k, _chain, _letter_chain
+    global _vectorstore, _top_k, _chain, _medicare_chain, _medicare_module_chain, _letter_chain
 
     embeddings = OpenAIEmbeddings(
         model=EMBEDDING_MODEL,
@@ -128,11 +158,13 @@ def init_chain(app) -> None:
     llm = ChatOpenAI(
         model=app.config["OPENAI_MODEL"],
         temperature=0,
-        max_tokens=300,
+        max_tokens=500,
         api_key=app.config["OPENAI_API_KEY"],
     )
 
     _chain = EXPLAIN_PROMPT | llm | StrOutputParser()
+    _medicare_chain = EXPLAIN_PROMPT_MEDICARE | llm | StrOutputParser()
+    _medicare_module_chain = EXPLAIN_MODULE_PROMPT_MEDICARE | llm | StrOutputParser()
     _letter_chain = LETTER_PROMPT | llm | StrOutputParser()
 
     logger.info(
@@ -164,11 +196,13 @@ def explain_detection(detection: dict) -> dict:
     if _vectorstore is None or _chain is None:
         raise RuntimeError("RAG chain is not initialized. Call init_chain(app) first.")
 
+    module = detection.get("module", "")
+    chain = _medicare_chain if module == "medicare_rate_outlier" else _chain
+
     error_type = _sanitize(detection["error_type"], 100)
     description = _sanitize(detection["description"], 500)
     query = f"{error_type}: {description}"
 
-    module = detection.get("module", "")
     allowed_sources = MODULE_SOURCE_ALLOWLIST.get(module)
     source_filter = (
         {"document_title": {"$in": allowed_sources}} if allowed_sources else None
@@ -190,7 +224,7 @@ def explain_detection(detection: dict) -> dict:
 
     context = "\n\n".join(doc.page_content for doc in docs)
 
-    explanation = _chain.invoke(
+    explanation = chain.invoke(
         {
             "error_type": error_type,
             "description": description,
@@ -218,6 +252,69 @@ def explain_detection(detection: dict) -> dict:
         "explanation": explanation,
         "citations": citations,
     }
+
+
+def explain_module_context(module: str) -> dict:
+    """
+    Generate a shared module-level explanation for all errors of the same module type.
+
+    Called once per unique module when multiple errors share a module — avoids near-duplicate
+    regulatory context text appearing on adjacent error cards. Does not reference specific
+    CPT codes or amounts; those are already shown in each card's description.
+
+    Args:
+        module: Service 2 module name (e.g. "medicare_rate_outlier").
+
+    Returns:
+        Dict with 'explanation' (str) and 'citations' (list[dict]).
+
+    Raises:
+        RuntimeError: If called before init_chain().
+    """
+    if _vectorstore is None or _medicare_module_chain is None:
+        raise RuntimeError("RAG chain is not initialized. Call init_chain(app) first.")
+
+    allowed_sources = MODULE_SOURCE_ALLOWLIST.get(module)
+    query = (
+        "Medicare physician fee schedule RVU conversion factor payment rate calculation"
+    )
+    source_filter = (
+        {"document_title": {"$in": allowed_sources}} if allowed_sources else None
+    )
+
+    if allowed_sources is not None:
+        logger.debug(
+            "Module context '%s' — restricting retrieval to %d sources",
+            module,
+            len(allowed_sources),
+        )
+        docs = _vectorstore.similarity_search(query, k=_top_k, filter=source_filter)
+    else:
+        logger.warning(
+            "Module '%s' has no source allowlist — skipping retrieval", module
+        )
+        docs = []
+
+    context = "\n\n".join(doc.page_content for doc in docs)
+
+    explanation = _medicare_module_chain.invoke(
+        {"error_type": "Medicare Rate Outlier", "context": context}
+    )
+
+    seen: set[str] = set()
+    citations: list[dict] = []
+    for doc in docs:
+        source = doc.metadata.get("document_title") or doc.metadata.get(
+            "source", "Unknown"
+        )
+        page = doc.metadata.get("page_number", "")
+        section = doc.metadata.get("section", "")
+        section_label = section or (f"p. {page}" if page else "")
+        if source not in seen:
+            seen.add(source)
+            citations.append({"source": source, "section": section_label, "url": None})
+
+    return {"explanation": explanation, "citations": citations}
 
 
 def draft_letter_content(analysis: dict) -> str:

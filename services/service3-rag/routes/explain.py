@@ -39,7 +39,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from flask import Blueprint, jsonify, request
 
-from rag.chain import explain_detection
+from rag.chain import explain_detection, explain_module_context
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +53,10 @@ KNOWN_MODULES = {
     "no_surprises_act",
     "eob_reconciliation",
 }
+
+# Modules where all errors share one explanation — generated once per module, not per error.
+# Ensures identical regulatory context text across cards of the same type.
+SHARED_EXPLANATION_MODULES = {"medicare_rate_outlier"}
 
 REQUIRED_FIELDS = ("error_id", "module", "error_type", "description")
 
@@ -101,31 +105,57 @@ def explain():
                 "Received unknown module '%s' — processing anyway.", error["module"]
             )
 
+    explanations: dict[str, dict] = {}
+
+    # ── Shared module explanations — one LLM call per module type ────────────
+    unique_shared = {
+        e["module"] for e in errors if e["module"] in SHARED_EXPLANATION_MODULES
+    }
+    for module in unique_shared:
+        try:
+            shared = explain_module_context(module)
+        except RuntimeError as exc:
+            logger.exception("RAG chain not ready")
+            return jsonify({"error": str(exc)}), 503
+        except Exception as exc:
+            logger.exception("RAG module context error for module '%s'", module)
+            return jsonify({"error": "RAG chain error.", "detail": str(exc)}), 500
+        for error in errors:
+            if error["module"] == module:
+                explanations[error["error_id"]] = shared
+
+    # ── Per-error explanations — parallel, skips shared-module errors ─────────
+    individual = [
+        (i, e)
+        for i, e in enumerate(errors)
+        if e["module"] not in SHARED_EXPLANATION_MODULES
+    ]
+
     def _run(indexed_error):
         i, error = indexed_error
         return i, error["error_id"], explain_detection(error)
 
-    explanations: dict[str, dict] = {}
-    # Cap at 5 workers — enough to cover all expected modules without flooding OpenAI
-    max_workers = min(len(errors), 5)
-
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {
-            executor.submit(_run, (i, error)): i for i, error in enumerate(errors)
-        }
-        for future in as_completed(futures):
-            try:
-                i, error_id, result = future.result()
-            except RuntimeError as exc:
-                logger.exception("RAG chain not ready")
-                return jsonify({"error": str(exc)}), 503
-            except Exception as exc:
-                logger.exception("RAG chain error for future index %d", futures[future])
-                return jsonify({"error": "RAG chain error.", "detail": str(exc)}), 500
-
-            explanations[error_id] = {
-                "explanation": result["explanation"],
-                "citations": result["citations"],
-            }
+    if individual:
+        max_workers = min(len(individual), 5)
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {executor.submit(_run, item): item[0] for item in individual}
+            for future in as_completed(futures):
+                try:
+                    i, error_id, result = future.result()
+                except RuntimeError as exc:
+                    logger.exception("RAG chain not ready")
+                    return jsonify({"error": str(exc)}), 503
+                except Exception as exc:
+                    logger.exception(
+                        "RAG chain error for future index %d", futures[future]
+                    )
+                    return (
+                        jsonify({"error": "RAG chain error.", "detail": str(exc)}),
+                        500,
+                    )
+                explanations[error_id] = {
+                    "explanation": result["explanation"],
+                    "citations": result["citations"],
+                }
 
     return jsonify({"session_id": session_id, "explanations": explanations}), 200
