@@ -231,6 +231,9 @@ Thumbs.db
 # ── Editor settings ───────────────────────────────────────────────────────────
 .vscode/
 
+# ── Local dev scripts ─────────────────────────────────────────────────────────
+start-medicheck.ps1
+
 # Temporary Scope documents
 claude.md
 # Claude Code
