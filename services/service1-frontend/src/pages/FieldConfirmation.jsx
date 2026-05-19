@@ -47,6 +47,12 @@ export default function FieldConfirmation() {
     setLoading(true)
     setError(null)
 
+    if (fields.total_billed !== '' && isNaN(parseFloat(fields.total_billed))) {
+      setError('Total Billed must be a valid number (e.g. 1250.00).')
+      setLoading(false)
+      return
+    }
+
     // Strip confidence scores and description before sending — per api-contract.md
     const confirmedFields = {
       patient_name: fields.patient_name,

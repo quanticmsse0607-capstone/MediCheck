@@ -4,6 +4,11 @@ import { Outlet, NavLink } from 'react-router-dom'
  * Layout — shared wrapper rendered on every page.
  * NFR-19: Consistent visual design across all four pages.
  */
+
+const dataDisclaimer =
+  import.meta.env.VITE_DATA_DISCLAIMER ??
+  'All patient data is synthetic and generated for demonstration purposes only.'
+
 export default function Layout() {
   return (
     <div className="min-h-screen flex flex-col">
@@ -26,7 +31,7 @@ export default function Layout() {
 
       <footer className="bg-white border-t border-gray-200 py-4">
         <div className="max-w-5xl mx-auto px-6 text-center text-xs text-gray-400">
-          MediCheck — Quantic MSSE Capstone &nbsp;|&nbsp; All patient data is synthetic and generated for demonstration purposes only.
+          MediCheck — Quantic MSSE Capstone &nbsp;|&nbsp; {dataDisclaimer}
         </div>
       </footer>
     </div>
