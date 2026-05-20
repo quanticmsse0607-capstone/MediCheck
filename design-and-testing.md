@@ -232,8 +232,9 @@
 | Service 1 — React Frontend | Vitest 4.x | 10 | — | API client unit tests only; no component tests |
 | Service 2 — Bill Analysis API | pytest 8.x | 74 | 94% | Excludes `services/ocr.py` (requires live AWS Textract) |
 | Service 3 — RAG & Letter | pytest 8.x | 43 | — | All OpenAI and ChromaDB calls mocked |
+| Cross-service Integration | pytest + requests | 10 | — | Live HTTP, real OpenAI calls; push to `main` only |
 
-**Total: 127 tests across all three services.**
+**Total: 137 tests across all three services.**
 
 ---
 
@@ -328,9 +329,47 @@ pytest tests/ -v
 
 ---
 
+### Cross-Service Integration Tests
+
+**File:** `tests/integration/test_e2e.py`
+
+**10 tests** that run the full user flow against live services on `localhost`. Unlike the per-service tests above, these make real HTTP calls and trigger real OpenAI API calls through Service 3. They are the only tests in the suite that verify the two services work correctly together.
+
+**Setup:** Service 2 runs with `USE_MOCK_OCR=true` (no AWS required) and `SERVICE3_URL=http://localhost:5002`. Service 3 runs with a real `OPENAI_API_KEY` and loads the committed ChromaDB embeddings from `data/chroma_db/`.
+
+| Class | Tests | What it covers |
+|---|---|---|
+| `TestHealth` | 2 | Both services respond 200 on `/health` before tests begin |
+| `TestUpload` | 2 | `POST /upload` returns a `session_id`; extracted fields and line items are present |
+| `TestAnalyse` | 4 | `POST /analyse` returns `status=analysed`; `rag_available=True` confirms Service 3 RAG pipeline responded; each detected error has a non-null LLM explanation and citations list; `total_errors` matches `errors` list length |
+| `TestReport` | 2 | `GET /report` returns the persisted session with `status=analysed` and the same error count as the analyse response |
+
+**Key integration assertion — `rag_available=True`:** This is the critical cross-service check. It proves Service 2 successfully called Service 3's `/explain` endpoint, Service 3 ran the RAG chain (ChromaDB retrieval + OpenAI LLM), and returned grounded explanations within the 60-second timeout.
+
+**Run locally:**
+```powershell
+# Terminal 1 — Service 3 (loads .env for OPENAI_API_KEY)
+cd services\service3-rag
+.\venv\Scripts\Activate.ps1
+flask run --port 5002
+
+# Terminal 2 — Service 2 (wait for Service 3 "RAG chain initialized")
+cd services\service2-billanalysis
+$env:USE_MOCK_OCR="true"; $env:SERVICE3_URL="http://localhost:5002"; $env:SERVICE3_TIMEOUT_SECONDS="60"
+.\venv\Scripts\Activate.ps1
+python app.py
+
+# Terminal 3 — run integration tests
+$env:SERVICE2_URL="http://localhost:5001"; $env:SERVICE3_URL="http://localhost:5002"
+.\services\service2-billanalysis\venv\Scripts\Activate.ps1
+pytest tests/integration/ -v
+```
+
+---
+
 ### Testing Approach
 
-**No live external calls in any test.** All infrastructure dependencies are isolated:
+**No live external calls in any unit or service-level test.** All infrastructure dependencies are isolated:
 
 | Dependency | How isolated |
 |---|---|
@@ -348,7 +387,7 @@ All test data is synthetic — no real patient or billing information (NFR-06).
 
 The CI pipeline (`.github/workflows/ci-cd.yml`) runs on every pull request and push to `main`.
 
-**Per-service jobs (run in parallel):**
+**Per-service jobs (run in parallel on every PR and push):**
 
 | Job | Steps |
 |---|---|
@@ -356,6 +395,13 @@ The CI pipeline (`.github/workflows/ci-cd.yml`) runs on every pull request and p
 | Service 3 | Black formatting check → Pylint (≥7.0, app + routes + rag) → pytest |
 | Service 1 | ESLint (`--max-warnings 0`) → Vitest → Vite production build |
 
-**Deploy job (push to `main` only, after all three jobs pass):**
+**Integration job (push to `main` only, after Service 2 and Service 3 pass):**
+- Generates a synthetic test bill PDF using reportlab
+- Starts Service 3 on `localhost:5002` via `nohup` with real `OPENAI_API_KEY`; waits up to 150s for `/health`
+- Starts Service 2 on `localhost:5001` via `nohup` with `USE_MOCK_OCR=true`; waits up to 60s for `/health`
+- Runs `pytest tests/integration/ -v` — all 10 cross-service tests must pass
+- Gated to push-to-main only to avoid OpenAI API costs on every PR
+
+**Deploy job (push to `main` only, after all four jobs pass):**
 - Triggers Render deploys for Service 2 and Service 3 via API
 - Post-deploy health checks: Service 2 retries 3× at 30s intervals; Service 3 retries 24× at 15s intervals (up to 6 minutes, accommodating Render free-tier cold start)
