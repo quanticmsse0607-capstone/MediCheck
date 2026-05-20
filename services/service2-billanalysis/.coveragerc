@@ -1,0 +1,6 @@
+[run]
+omit =
+    venv/*
+    tests/*
+    services/ocr copy.py
+    services/ocr.py

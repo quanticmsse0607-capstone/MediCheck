@@ -59,7 +59,7 @@ export default function FieldConfirmation() {
       provider_name: fields.provider_name,
       date_of_service: fields.date_of_service,
       total_billed: parseFloat(fields.total_billed) || 0,
-      line_items: (fields.line_items || []).map(({ confidence, description, ...rest }) => ({
+      line_items: (fields.line_items || []).map(({ confidence: _confidence, description: _description, ...rest }) => ({
         ...rest,
         amount: parseFloat(rest.amount) || 0,
         quantity: parseInt(rest.quantity) || 1
