@@ -37,7 +37,7 @@ def create_app(config_name: str = None) -> Flask:
 
     # ── Initialize RAG chain ──────────────────────────────────────────────────
     import logging
-    from rag.chain import init_chain
+    from rag.chain import init_chain, is_ready
 
     try:
         init_chain(app)
@@ -46,6 +46,18 @@ def create_app(config_name: str = None) -> Flask:
             "RAG chain failed to initialize — aborting startup"
         )
         raise
+
+    # ── Guard against debug-reloader resetting module globals (L5) ───────────
+    # Flask's Werkzeug reloader can reload modules, resetting _vectorstore and
+    # _chain to None. The before_request hook re-initializes on the next request
+    # if the singletons were reset, rather than serving silent 503s.
+    @app.before_request
+    def _ensure_chain_initialized():
+        if not is_ready():
+            logging.getLogger(__name__).warning(
+                "RAG chain not ready on request — re-initializing"
+            )
+            init_chain(app)
 
     return app
 
