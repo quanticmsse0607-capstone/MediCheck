@@ -37,7 +37,7 @@ describe('request — error handling', () => {
   })
 
   it('throws ApiError with server error_code on non-OK response', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
+    globalThis.fetch = vi.fn().mockResolvedValue({
       ok: false,
       status: 404,
       json: async () => ({
@@ -55,7 +55,7 @@ describe('request — error handling', () => {
 
   it('throws ApiError with INVALID_RESPONSE when response body is not JSON (H4 fix)', async () => {
     // Simulates Render 502 returning an HTML error page instead of JSON
-    global.fetch = vi.fn().mockResolvedValue({
+    globalThis.fetch = vi.fn().mockResolvedValue({
       ok: false,
       status: 502,
       json: async () => { throw new SyntaxError('Unexpected token < in JSON') },
@@ -68,7 +68,7 @@ describe('request — error handling', () => {
   })
 
   it('returns parsed data on a successful response', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
+    globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
       json: async () => ({ session_id: 'abc-123', status: 'analysed', total_errors: 2 }),
@@ -88,7 +88,7 @@ describe('confirmFields', () => {
   })
 
   it('sends session_id and confirmed_fields in the request body', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
+    globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
       json: async () => ({ session_id: 'abc', status: 'confirmed' }),
@@ -96,7 +96,7 @@ describe('confirmFields', () => {
 
     await confirmFields('abc', { patient_name: 'Jane Doe', total_billed: 1250.00 })
 
-    const [, options] = global.fetch.mock.calls[0]
+    const [, options] = globalThis.fetch.mock.calls[0]
     const body = JSON.parse(options.body)
     expect(body.session_id).toBe('abc')
     expect(body.confirmed_fields.patient_name).toBe('Jane Doe')
@@ -112,7 +112,7 @@ describe('uploadDocuments', () => {
   })
 
   it('includes bill file in FormData', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
+    globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
       json: async () => ({ session_id: 'xyz', status: 'extracted' }),
@@ -123,14 +123,14 @@ describe('uploadDocuments', () => {
     })
     await uploadDocuments(billFile)
 
-    const [, options] = global.fetch.mock.calls[0]
+    const [, options] = globalThis.fetch.mock.calls[0]
     expect(options.body).toBeInstanceOf(FormData)
     expect(options.body.get('bill')).toBe(billFile)
     expect(options.body.get('eob')).toBeNull()
   })
 
   it('appends EOB to FormData when provided', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
+    globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
       json: async () => ({ session_id: 'xyz', status: 'extracted' }),
@@ -140,7 +140,7 @@ describe('uploadDocuments', () => {
     const eobFile = new File([new Uint8Array([0x25])], 'eob.pdf')
     await uploadDocuments(billFile, eobFile)
 
-    const [, options] = global.fetch.mock.calls[0]
+    const [, options] = globalThis.fetch.mock.calls[0]
     expect(options.body.get('eob')).toBe(eobFile)
   })
 })
@@ -153,7 +153,7 @@ describe('getReport', () => {
   })
 
   it('calls GET /report/<sessionId>', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
+    globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
       json: async () => ({ session_id: 'abc', status: 'analysed' }),
@@ -161,7 +161,7 @@ describe('getReport', () => {
 
     await getReport('abc')
 
-    const [url] = global.fetch.mock.calls[0]
+    const [url] = globalThis.fetch.mock.calls[0]
     expect(url).toContain('/report/abc')
   })
 })

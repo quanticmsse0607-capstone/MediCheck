@@ -91,7 +91,10 @@ class TestGetExplanations:
         assert result["success"] is True
         assert result["rag_available"] is True
         assert "err_001" in result["explanations"]
-        assert result["explanations"]["err_001"]["explanation"] == "Duplicate CPT billing is not permitted."
+        assert (
+            result["explanations"]["err_001"]["explanation"]
+            == "Duplicate CPT billing is not permitted."
+        )
 
     def test_passes_explicit_timeout(self, client_ctx, mocker):
         """NFR-18: timeout must always be passed to requests.post."""
@@ -163,7 +166,9 @@ class TestGenerateLetter:
             "services.rag_client.requests.post",
             return_value=mocker.Mock(
                 status_code=200,
-                json=lambda: {"letter_content": "I am writing to dispute these charges."},
+                json=lambda: {
+                    "letter_content": "I am writing to dispute these charges."
+                },
                 raise_for_status=lambda: None,
             ),
         )

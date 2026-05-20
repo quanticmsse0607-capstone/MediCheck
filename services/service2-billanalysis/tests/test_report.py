@@ -142,7 +142,9 @@ class TestGetReport:
         r = client.get(f"/report/{sid}")
         assert r.get_json()["rag_available"] is False
 
-    def test_includes_download_urls_when_letter_exists(self, app, client, analysed_session):
+    def test_includes_download_urls_when_letter_exists(
+        self, app, client, analysed_session
+    ):
         with app.app_context():
             with tempfile.TemporaryDirectory() as tmpdir:
                 docx_path = os.path.join(tmpdir, "letter.docx")
