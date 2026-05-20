@@ -169,7 +169,7 @@ class TestReport:
         assert r.status_code == 200
         data = r.json()
         assert data["session_id"] == e2e_result["session_id"]
-        assert data["status"] == "ANALYSED"
+        assert data["status"] == "analysed"
 
     def test_report_error_count_matches_analyse(self, e2e_result):
         r = requests.get(
