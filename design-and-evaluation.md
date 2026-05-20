@@ -127,6 +127,167 @@ All frontend→Service 2 calls go through `medicheck.js`:
 
 ---
 
+## Service 2 — Bill Analysis API
+
+### Overview
+
+Service 2 is a stateful Flask REST API responsible for accepting uploaded medical bills and Explanation of Benefits (EOB) documents, running OCR extraction, orchestrating billing error detection, persisting results, and generating formal dispute letters. It acts as the central backend of MediCheck — receiving all requests from Service 1 (frontend) and dispatching enrichment requests to Service 3 (RAG explanations).
+
+**Architecture:**
+- Framework: Flask (Python), application factory pattern (`create_app`)
+- ORM: SQLAlchemy with Flask-SQLAlchemy extension
+- Database: SQLite (development), PostgreSQL (production on Render)
+- OCR: AWS Textract (`AnalyzeDocument` API) with PDF-to-image conversion via PyMuPDF; mock OCR service available via `USE_MOCK_OCR` env var for testing
+- Error detection: Strategy pattern — four pluggable detector modules orchestrated by `ErrorDetectionEngine`
+- Letter generation: `python-docx` (DOCX) + `docx2pdf` (PDF); files persisted on disk and served via download endpoint
+- Deployment: Render (web service), PostgreSQL add-on
+
+**Configurable env vars:**
+
+| Variable | Purpose | Default |
+|---|---|---|
+| `DATABASE_URL` | SQLAlchemy database URI | `sqlite:///medicheck_dev.db` |
+| `SERVICE3_URL` | Service 3 base URL for RAG calls | `http://localhost:5002` (warns in production) |
+| `SERVICE2_BASE_URL` | Self URL used for generating download links | `http://localhost:5001` (warns in production) |
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_REGION` | Textract credentials | — |
+| `MAX_FILE_SIZE_MB` | Upload size limit | 10 MB |
+| `MAX_PAGE_COUNT` | PDF page limit | 20 pages |
+| `USE_MOCK_OCR` | Switch to synthetic OCR for testing | `false` |
+| `SECRET_KEY` | Flask session secret | `dev-secret-change-in-prod` |
+
+`ProductionConfig.validate()` runs at startup and logs loud warnings if `SERVICE3_URL`, `SERVICE2_BASE_URL`, or `DATABASE_URL` are missing or still set to `localhost`. This prevents silent misrouting in deployed environments (anti-patterns H1, H5).
+
+---
+
+### API Endpoints
+
+| Route | Method | Purpose | Session Transition |
+|---|---|---|---|
+| `/health` | GET | Liveness probe; returns `{"status": "ok"}` | None |
+| `/upload` | POST | Accept PDF files, run OCR, create session | None → `extracted` |
+| `/confirm` | POST | Accept user-corrected fields, advance state | `extracted` → `confirmed` |
+| `/analyse` | POST | Run all 4 detectors, call Service 3 for explanations | `confirmed` → `analysed` |
+| `/letter` | POST | Generate `.docx` + `.pdf` dispute letter | `analysed` → `letter_generated` |
+| `/report/<session_id>` | GET | Retrieve analysis results (idempotent) | None |
+| `/download/<session_id>/<filename>` | GET | Serve generated letter file (DOCX or PDF) | None |
+
+**Common error responses:**
+- `400 INVALID_FILE_TYPE` — uploaded file is not a PDF
+- `400 FILE_TOO_LARGE` — exceeds `MAX_FILE_SIZE_MB`
+- `400 NOT_CONFIRMED` — state machine transition invalid (e.g., `/analyse` before `/confirm`)
+- `404 SESSION_NOT_FOUND` — session ID does not exist
+- `404 NO_ANALYSIS_RESULTS` — `/letter` called before analysis is complete
+
+---
+
+### Session State Machine
+
+Service 2 enforces a strict four-state workflow on every session:
+
+```
+extracted → confirmed → analysed → letter_generated
+```
+
+Each state transition is validated by `SessionStatus.can_transition_to(current, target)` before the route proceeds. If the transition is invalid (e.g., `/analyse` called before `/confirm`), the endpoint returns HTTP 400 `NOT_CONFIRMED`. This prevents out-of-order API calls and keeps session state consistent with persisted data (FR-26).
+
+Status is stored as a string column on the `Session` model and updated only on a successful database commit. If the commit fails, the status update is rolled back so the session remains in its prior valid state (anti-pattern L3).
+
+---
+
+### OCR Strategy
+
+**Primary — AWS Textract:**
+- `AnalyzeDocument` API processes uploaded PDFs for text and table extraction
+- PyMuPDF converts the first PDF page to a PNG image before submission, as Textract requires image input for programmatically-generated PDFs (e.g., ReportLab)
+- Confidence scores are returned per field and stored in `LineItem.confidence`
+- Fields with confidence below 80% (`OCR_CONFIDENCE_THRESHOLD`) are flagged for review in the Service 1 UI
+
+**Fallback — Mock OCR:**
+- `USE_MOCK_OCR=true` substitutes `MockOCRService`, which returns synthetic field data matching the same output shape as Textract
+- Enables local development and CI testing without AWS credentials or internet access
+- Both implementations return: `{"patient_name": ..., "provider_name": ..., "date_of_service": ..., "total_billed": ..., "line_items": [...]}`
+
+**CPT descriptions are never populated** — omitted intentionally to avoid AMA copyright restrictions on CPT code terminology.
+
+---
+
+### Detector Architecture
+
+Error detection follows the **Strategy Pattern**: each detector is a standalone class that implements `BaseDetector.run(confirmed_fields: dict) → list[DetectionResult]`. The `ErrorDetectionEngine` orchestrates all registered detectors without knowing their internals.
+
+**BaseDetector / DetectionResult:**
+- `BaseDetector` is an abstract class; all detectors subclass it
+- `DetectionResult` is a dataclass: `module`, `error_type`, `description`, `line_items_affected`, `estimated_dollar_impact`, `confidence`
+- Adding a new detector requires only: subclass `BaseDetector`, register in `engine._build_detectors()`
+
+**Resilience (FR-10, FR-16):**
+- One detector throwing an exception does not stop others; the exception is caught, the detector class name is logged, and the pipeline continues with remaining detectors
+- Each `DetectionResult` is validated before persistence; defective results are logged and skipped, not raised
+
+**The four detectors:**
+
+| Detector | What it detects | Confidence |
+|---|---|---|
+| `DuplicateChargeDetector` | Same CPT code billed more than once on the same date (bill source only) | High |
+| `EOBReconciliationDetector` | Bill line item not in EOB; or mismatch in amount (tolerance $0.01), date, or quantity | High (amount) / Medium (date, qty, missing) |
+| `MedicareRateDetector` | Billed amount exceeds 300% of CMS Medicare fee schedule rate for the CPT code and locality | High (≥500%) / Medium (≥350%) / Low (≥300%) |
+| `NoSurprisesActDetector` | Out-of-network balance billing for emergency care (CPT 99281–99285, 99291–99292) or OON ancillary providers at in-network facility | Medium |
+
+**Medicare rate data:** CMS fee schedule loaded from `data/cms_fee_schedule.json`; default locality South Carolina Rest of State (07). If no rate exists for a CPT code, the line item is silently skipped — absence of rate data is not treated as an error. North Carolina locality (26) is also configured as a supported locality.
+
+---
+
+### Database Models
+
+Five SQLAlchemy models persist the full analysis lifecycle:
+
+| Model | Purpose | Key fields |
+|---|---|---|
+| `Session` | Root entity; anchors the workflow | `session_id` (UUID PK), `status`, `created_at`, `updated_at` |
+| `ExtractedField` | OCR output for a session | `patient_name`, `provider_name`, `date_of_service`, `total_billed` |
+| `LineItem` | One bill or EOB line per row | `cpt_code`, `quantity`, `source` ("bill"/"eob"), `confidence`; immutable extracted values + mutable corrected values |
+| `AnalysisResult` | One row per detected error | `error_id`, `module`, `error_type`, `description`, `estimated_dollar_impact`, `confidence`; nullable `explanation` + `citations` (populated by Service 3) |
+| `DisputeLetter` | Paths to generated letter files | `docx_path`, `pdf_path`; 1-to-1 with Session |
+
+**Immutability principle:** `LineItem.extracted_amount` and `LineItem.confidence` are never overwritten after OCR. User corrections are stored in `corrected_amount` / `corrected_date`. The `LineItem.amount` property returns the corrected value if set, otherwise the extracted value. This preserves a full audit trail: original OCR output and patient corrections are independently queryable.
+
+**Cascade delete:** All child records (`ExtractedField`, `LineItem`, `AnalysisResult`, `DisputeLetter`) cascade-delete when the parent `Session` is removed.
+
+---
+
+### Service 3 Integration
+
+Service 2 calls Service 3 twice during the analysis workflow:
+
+1. **At upload time (`POST /upload`):** Calls `GET /health` on Service 3 to determine whether RAG is available. Sets `rag_available` in the upload response so Service 1 can render appropriate UI state from the outset.
+2. **At analysis time (`POST /analyse`):** Calls `POST /explain` with the list of detected errors. Service 3 returns a grounded explanation and citations per `error_id`. These are merged into `AnalysisResult` rows before the response is returned.
+
+**Graceful degradation (NFR-02, NFR-18):**
+- All outbound Service 3 calls use an explicit 10-second timeout
+- `requests.Timeout` and `requests.ConnectionError` are caught; the partial response (explanations `null`, `rag_available: false`) is returned with HTTP 200 — not HTTP 503
+- This allows patients to access analysis results even when Service 3 is unavailable or cold-starting on Render
+- If `error_id` keys are missing from the Service 3 response, the gap is logged as a warning before the merge so the absence is visible in logs (anti-pattern M4)
+
+---
+
+### Test Coverage
+
+| File | Scope | Notes |
+|---|---|---|
+| `test_detectors.py` | Unit tests for all 4 detectors | 15+ tests covering normal cases, edge cases, missing data, and boundary thresholds (NFR-25) |
+| `test_engine.py` | `ErrorDetectionEngine` orchestration | Verifies all detectors execute; one failure doesn't stop others (FR-10); result defect detection (FR-16) |
+| `test_analyse.py` | `POST /analyse` route integration | 404, 400, 200 full response; partial response on Service 3 timeout; all-clear scenario |
+| `test_pipeline.py` | End-to-end: upload → confirm → analyse → letter → download | Mock OCR + mock Service 3; in-memory SQLite; synthetic PDF generation |
+| `test_upload.py` | `POST /upload` route | Placeholder — not yet populated |
+
+**Testing approach:**
+- No live HTTP calls — Service 3 is always mocked via `pytest-mock`
+- No AWS Textract calls — `MockOCRService` or mocked client substituted in all tests
+- In-memory SQLite database for all integration tests
+- All test data is synthetic — no real patient or billing data
+
+---
+
 ## Service 3 — RAG & Explanation Service
 
 ### Overview
@@ -381,13 +542,8 @@ All four cases cited the NSA Overview document directly and correctly. Emergency
 
 ---
 
-### Remaining Gaps and Future Work
+### Knowledge Base Gap — Date Mismatch (eval_011)
 
-**Module 3 — date mismatch (eval_011)**
-No public-domain source addresses date-of-service discrepancies between a provider bill and EOB. A CMS EOB guidance document or NAIC model act publication could fill this gap if identified and confirmed to chunk well.
+No public-domain source in the current knowledge base addresses date-of-service discrepancies between a provider bill and an EOB. These are clerical billing errors with no regulatory grounding in the NSA or Medicare fee schedule documents. As a result, eval_011 cites an irrelevant NSA document and scores 0 for citation accuracy.
 
-**Module 3 — error subtype awareness**
-Service 2's `error_type` field distinguishes between Amount Mismatch, Missing from EOB, and Date Mismatch. Service 3 currently uses only the module name for retrieval filtering. Passing the subtype through to `explain_detection()` would allow finer-grained source selection — for example, excluding NSA documents entirely for date mismatch cases where they are never relevant. This requires no API contract changes (the field is already in the payload) but was deferred given the time cost and the absence of a suitable date-mismatch source document.
-
-**Textract live testing**
-All evaluation was conducted with `USE_MOCK_OCR=true`. Live Textract testing requires account-level activation in the AWS console (a `SubscriptionRequiredException` was encountered on the first attempt — not a credentials issue). This remains an open item pending AWS account activation.
+A CMS EOB guidance document or NAIC model act publication could fill this gap if a suitable public-domain source is identified and confirmed to chunk well. Until then, date mismatch explanations will draw on whichever Module 3 source is retrieved as nearest-neighbour — accuracy for this subtype remains limited.
