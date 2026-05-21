@@ -47,7 +47,7 @@ def analyse():
     session_id = data.get("session_id")
 
     # ── 1. Validate session ───────────────────────────────────────────────────
-    session = Session.query.get(session_id)
+    session = db.session.get(Session, session_id)
     if not session:
         return _error(
             404,

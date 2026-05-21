@@ -38,7 +38,7 @@ def generate_letter():
     session_id = data.get("session_id")
 
     # ── 1. Validate session ───────────────────────────────────────────────────
-    session = Session.query.get(session_id)
+    session = db.session.get(Session, session_id)
     if not session:
         return _error(
             404,
@@ -150,7 +150,7 @@ def get_report(session_id: str):
                   all_clear, rag_available, errors[], downloads (if letter exists)
     Response 404: SESSION_NOT_FOUND
     """
-    session = Session.query.get(session_id)
+    session = db.session.get(Session, session_id)
     if not session:
         return _error(
             404,
