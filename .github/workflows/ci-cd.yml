@@ -302,16 +302,22 @@ jobs:
             -d '{"clearCache": false}'
           echo "Service 3 deploy triggered"
 
+      - name: Wait for Render spin-up
+        run: |
+          echo "Sleeping 60s to allow Render services to spin up before health checks..."
+          sleep 60
+
       - name: Health check Service 2
         run: |
           for i in 1 2 3; do
+            body=$(curl -s https://medicheck-bill-analysis.onrender.com/health)
             response=$(curl -s -o /dev/null -w "%{http_code}" \
               https://medicheck-bill-analysis.onrender.com/health)
             if [ "$response" = "200" ]; then
               echo "Service 2 health check PASSED - HTTP $response (attempt $i)"
               exit 0
             fi
-            echo "Attempt $i: HTTP $response — retrying in 30s..."
+            echo "Attempt $i: HTTP $response — body: $body — retrying in 30s..."
             sleep 30
           done
           echo "Service 2 health check FAILED after 3 attempts"
@@ -322,13 +328,14 @@ jobs:
         run: |
           echo "Waiting for Service 3 to be ready..."
           for i in $(seq 1 24); do
+            body=$(curl -s https://medicheck-rag.onrender.com/health)
             response=$(curl -s -o /dev/null -w "%{http_code}" \
               https://medicheck-rag.onrender.com/health)
             if [ "$response" = "200" ]; then
               echo "Service 3 health check PASSED - HTTP $response (attempt $i)"
               exit 0
             fi
-            echo "Attempt $i: HTTP $response — retrying in 15s..."
+            echo "Attempt $i: HTTP $response — body: $body — retrying in 15s..."
             sleep 15
           done
           echo "Service 3 health check FAILED after 6 minutes"
@@ -337,13 +344,14 @@ jobs:
       - name: Health check Service 1
         run: |
           for i in 1 2 3; do
+            body=$(curl -s https://medicheck-frontend-i3rv.onrender.com/)
             response=$(curl -s -o /dev/null -w "%{http_code}" \
               https://medicheck-frontend-i3rv.onrender.com/)
             if [ "$response" = "200" ]; then
               echo "Service 1 health check PASSED - HTTP $response (attempt $i)"
               exit 0
             fi
-            echo "Attempt $i: HTTP $response — retrying in 30s..."
+            echo "Attempt $i: HTTP $response — body: $body — retrying in 30s..."
             sleep 30
           done
           echo "Service 1 health check FAILED after 3 attempts"
