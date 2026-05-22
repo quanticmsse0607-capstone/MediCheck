@@ -2,6 +2,24 @@
 
 ---
 
+## Deviations from Proposal
+
+The implemented system aligns with Proposal v4 in all major respects — three-service microservices architecture, four error detection modules, RAG pipeline, dispute letter generation, CI/CD pipeline, and all three demo scenarios. The following minor deviations occurred during implementation:
+
+**Render service URLs** — the proposal listed placeholder URLs. Actual deployed URLs are:
+
+| Service | Proposed | Deployed |
+|---|---|---|
+| Service 1 — Frontend | `medicheck.onrender.com` | `https://medicheck-frontend-i3rv.onrender.com` |
+| Service 2 — Bill Analysis API | `medicheck-api.onrender.com` | `https://medicheck-bill-analysis.onrender.com` |
+| Service 3 — RAG Service | `medicheck-rag.onrender.com` | `https://medicheck-rag.onrender.com` |
+
+**CMS Physician Fee Schedule — direct lookup instead of RAG** — the proposal included the CMS fee schedule CSV as a RAG knowledge base source. In implementation, the rate data is pre-processed into locality-specific CSV files (`medicare_rates_sc.csv`, `medicare_rates_nc.csv`) and queried directly by the Module 2 detector at detection time. The ChromaDB knowledge base instead includes `RVU26B.pdf`, which provides the rate calculation methodology and is used by Service 3 to generate grounded explanations for rate outlier findings. This approach gives Module 2 deterministic, exact-match rate comparisons rather than approximations through semantic search.
+
+**`rag_available` removed from POST /upload response** — the proposal API contract included `rag_available` in the upload response. This was removed during implementation (anti-pattern fix M9): Service 3 reachability is checked at analyse time, not at upload time, so reporting it on upload would be misleading. The field remains in the POST /analyse and GET /report responses.
+
+---
+
 ## Service 1 — React Frontend
 
 ### Overview
@@ -24,7 +42,7 @@ Service 1 is a React single-page application (SPA) that provides a user-friendly
 Service 1 implements a **4-screen linear workflow** with stateless, URL-driven routing:
 
 1. **Upload (/)** — Patient uploads provider bill PDF (required) and EOB PDF (optional)
-   - `POST /upload` → receives `session_id`, `extracted_fields`, `rag_available` flag
+   - `POST /upload` → receives `session_id`, `extracted_fields`
    - Navigates to `/confirm/{sessionId}`
 
 2. **Field Confirmation (/confirm/:sessionId)** — Patient reviews and corrects extracted fields
