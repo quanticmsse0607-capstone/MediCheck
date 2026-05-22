@@ -404,4 +404,7 @@ The CI pipeline (`.github/workflows/ci-cd.yml`) runs on every pull request and p
 
 **Deploy job (push to `main` only, after all four jobs pass):**
 - Triggers Render deploys for Service 2 and Service 3 via API
-- Post-deploy health checks: Service 2 retries 3× at 30s intervals; Service 3 retries 24× at 15s intervals (up to 6 minutes, accommodating Render free-tier cold start)
+- Post-deploy health checks for all three services:
+  - Service 1 (`https://medicheck-frontend-i3rv.onrender.com/`): retries 3× at 30s intervals
+  - Service 2 (`/health`): retries 3× at 30s intervals
+  - Service 3 (`/health`): retries 24× at 15s intervals (up to 6 minutes, accommodating Render free-tier cold start)

@@ -333,3 +333,18 @@ jobs:
           done
           echo "Service 3 health check FAILED after 6 minutes"
           exit 1
+
+      - name: Health check Service 1
+        run: |
+          for i in 1 2 3; do
+            response=$(curl -s -o /dev/null -w "%{http_code}" \
+              https://medicheck-frontend-i3rv.onrender.com/)
+            if [ "$response" = "200" ]; then
+              echo "Service 1 health check PASSED - HTTP $response (attempt $i)"
+              exit 0
+            fi
+            echo "Attempt $i: HTTP $response — retrying in 30s..."
+            sleep 30
+          done
+          echo "Service 1 health check FAILED after 3 attempts"
+          exit 1
