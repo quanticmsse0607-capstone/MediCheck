@@ -3,8 +3,8 @@
 **Document:** Inter-Service API Contract — Service 1 → Service 2  
 **Version:** 1.0  
 **Sprint:** 2  
-**Status:** Draft — pending team review and sign-off before coding begins  
-**Last Updated:** March 2026  
+**Status:** Agreed — implemented and verified against running services  
+**Last Updated:** May 2026  
 **Owners:** Both team members
 
 ---
@@ -80,8 +80,7 @@ Content-Type: multipart/form-data
         "source": "bill"
       }
     ]
-  },
-  "rag_available": true
+  }
 }
 ```
 
@@ -101,7 +100,6 @@ Content-Type: multipart/form-data
 - `description` — always an empty string. CPT code descriptions are AMA-copyrighted and must never be populated.
 - `confidence` — float 0.0–1.0 representing OCR extraction confidence for each field. Fields below 0.80 should be highlighted in the field confirmation UI.
 - `source` — `"bill"` or `"eob"`. Identifies which uploaded document each line item came from.
-- `rag_available` — indicates whether Service 3 is reachable. Frontend should note this but no action required at upload stage.
 
 ---
 
@@ -205,7 +203,7 @@ The frontend triggers error detection after field confirmation. Service 2 runs a
         {
           "source": "CMS Medicare Claims Processing Manual",
           "section": "Chapter 23",
-          "url": "https://www.cms.gov/regulations-and-guidance/guidance/manuals/downloads/clm104c23.pdf"
+          "url": null
         }
       ]
     }
@@ -332,7 +330,25 @@ No request body. Session identifier is passed as a URL path parameter.
 
 ### Response — HTTP 200 (success)
 
-Same structure as POST /analyse HTTP 200 response.
+Same structure as POST /analyse HTTP 200 response, with one additional optional field:
+
+```json
+{
+  "session_id": "...",
+  "status": "letter_generated",
+  "total_errors": 2,
+  "total_estimated_savings": 747.00,
+  "all_clear": false,
+  "rag_available": true,
+  "errors": [...],
+  "downloads": {
+    "docx": "https://medicheck-bill-analysis.onrender.com/download/550e8400-e29b-41d4-a716-446655440000/letter.docx",
+    "pdf":  "https://medicheck-bill-analysis.onrender.com/download/550e8400-e29b-41d4-a716-446655440000/letter.pdf"
+  }
+}
+```
+
+`downloads` is only present when a letter has already been generated for the session. Omitted otherwise.
 
 ### Response — HTTP 404 (session not found or not yet analysed)
 
@@ -362,11 +378,9 @@ All error responses across all endpoints follow this consistent structure:
 |---|---|---|---|
 | INVALID_FILE_TYPE | 400 | /upload | Uploaded file is not a PDF |
 | FILE_TOO_LARGE | 400 | /upload | Upload exceeds 10 MB |
-| PAGE_LIMIT_EXCEEDED | 400 | /upload | Upload exceeds 20 pages |
-| MISSING_BILL | 400 | /upload | No bill file provided |
+| NO_BILL_UPLOADED | 400 | /upload | No bill file provided (field name must be `bill`) |
 | SESSION_NOT_FOUND | 404 | /confirm, /analyse, /letter, /report | session_id does not exist |
-| INVALID_SESSION_STATUS | 400 | /confirm, /analyse, /letter | Request made in wrong workflow order |
-| NOT_CONFIRMED | 400 | /analyse | Analysis triggered before field confirmation |
+| NOT_CONFIRMED | 400 | /confirm, /analyse | Session not in the required status for this operation |
 | NO_ANALYSIS_RESULTS | 404 | /letter, /report | Letter or report requested before analysis |
 | RAG_UNAVAILABLE | 200 (partial) | /analyse | Service 3 timeout — partial response returned |
 
@@ -374,23 +388,19 @@ All error responses across all endpoints follow this consistent structure:
 
 ## Decisions Log
 
-The following decisions were proposed during Sprint 1 planning. Both team members must confirm each item before coding begins. Update the Status column once confirmed.
+All decisions confirmed during Sprint 2 and implemented as specified.
 
-| Decision | Recommendation | Confirmed by Member 1 | Confirmed by Member 2 |
-|---|---|---|---|
-| CPT descriptions — empty or omitted? | Empty string — never populated | ☐ | ☐ |
-| Confidence threshold for yellow highlight in UI | 0.80 (80%) | ☐ | ☐ |
-| Bill and EOB fields — merged or separate? | Separate with `source` field on each line item | ☐ | ☐ |
-| Confidence scores stripped from confirmed fields? | Yes — strip before sending | ☐ | ☐ |
-| `confidence` field type — string or float? | String: `"high"`, `"medium"`, `"low"` | ☐ | ☐ |
-| `all_clear` field when no errors found? | Yes — explicit `"all_clear": true` | ☐ | ☐ |
-| Download URLs — relative or absolute? | Full absolute URLs | ☐ | ☐ |
-| `error_id` format | Simple string: `err_001`, `err_002` | ☐ | ☐ |
-| `module` field values | `duplicate_charge`, `rate_outlier`, `eob_reconciliation`, `no_surprises_act` | ☐ | ☐ |
-
----
-
-*Once all decisions are confirmed, remove the checkbox columns and update the document status to "Agreed". Commit to `/docs/api-contract.md`.*
+| Decision | Agreed Implementation |
+|---|---|
+| CPT descriptions — empty or omitted? | Empty string — never populated |
+| Confidence threshold for yellow highlight in UI | 0.80 (80%) |
+| Bill and EOB fields — merged or separate? | Separate with `source` field on each line item |
+| Confidence scores stripped from confirmed fields? | Yes — stripped before sending to /confirm |
+| `confidence` field type — string or float? | String: `"high"`, `"medium"`, `"low"` |
+| `all_clear` field when no errors found? | Yes — explicit `"all_clear": true` |
+| Download URLs — relative or absolute? | Full absolute URLs built from `SERVICE2_BASE_URL` config |
+| `error_id` format | Simple string: `err_001`, `err_002` |
+| `module` field values | `duplicate_charge`, `rate_outlier`, `eob_reconciliation`, `no_surprises_act` |
 
 ---
 
@@ -398,7 +408,7 @@ The following decisions were proposed during Sprint 1 planning. Both team member
 
 **Version:** 1.0
 **Sprint:** 2
-**Status:** Draft — pending team review and sign-off before coding begins
+**Status:** Agreed — implemented and verified against running services
 
 ---
 
@@ -453,13 +463,15 @@ Service 2 sends the list of detected errors. Service 3 queries the vector store 
         {
           "source": "CMS Medicare Claims Processing Manual",
           "section": "Chapter 23",
-          "url": "https://www.cms.gov/regulations-and-guidance/guidance/manuals/downloads/clm104c23.pdf"
+          "url": null
         }
       ]
     }
   }
 }
 ```
+
+> `session_id` is echoed back from the request. `url` is always `null` — source URLs are not stored in the vector database.
 
 #### Field Notes
 
@@ -518,8 +530,10 @@ Service 2 sends the full analysis payload. Service 3 generates the letter body t
 
 ### Decisions Log — Service 2 → Service 3
 
-| Decision | Recommendation | Confirmed by Member 1 | Confirmed by Member 2 |
-|---|---|---|---|
-| `explanations` response — keyed by `error_id` or array? | Keyed by `error_id` — simpler merge in Service 2 | ☐ | ☐ |
-| `letter_content` format — plain text or HTML? | Plain text — Service 2 handles formatting | ☐ | ☐ |
-| Timeout handling — Service 3 responsibility or Service 2? | Service 2 handles timeout gracefully — Service 3 has no special handling | ☐ | ☐ |
+All decisions confirmed during Sprint 2 and implemented as specified.
+
+| Decision | Agreed Implementation |
+|---|---|
+| `explanations` response — keyed by `error_id` or array? | Keyed by `error_id` — simpler merge in Service 2 |
+| `letter_content` format — plain text or HTML? | Plain text — Service 2 handles formatting |
+| Timeout handling — Service 3 responsibility or Service 2? | Service 2 handles timeout gracefully — Service 3 has no special handling |
