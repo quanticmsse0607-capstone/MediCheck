@@ -37,7 +37,7 @@ MediCheck's current capstone deployment runs at **$0/month** using free tiers ac
 | Render free services sleep after 15 min | First request takes 30–60s cold start | Acceptable for capstone demo |
 | AWS Textract free tier expires after 12 months | Will incur charges after Year 1 | Switch to pdfplumber or upgrade |
 | Supabase 500MB storage limit | ~50,000 sessions before limit | More than sufficient for capstone |
-| OpenAI $5 credits | Exhausted after ~5,000 explain calls | Add credits as needed |
+| OpenAI $5 credits | Exhausted after ~5,000 explain calls; CI integration tests also consume credits (~$0.004/push to main — 4 real `/explain` calls per run) | Add credits as needed; set a spend limit on platform.openai.com |
 | GitHub Actions 2,000 min/month | ~200 CI/CD pipeline runs | More than sufficient |
 
 ---
@@ -88,7 +88,7 @@ MediCheck's current capstone deployment runs at **$0/month** using free tiers ac
 |---|---|---|---|---|
 | POST /explain (per error) | ~500 tokens | ~$0.001 | ~$0.50 | ~$5.00 |
 | POST /draft-letter | ~1,000 tokens | ~$0.002 | ~$0.20 | ~$2.00 |
-| Embeddings (knowledge base) | ~2,000 tokens | ~$0.0002 | One-time ~$0.04 | One-time ~$0.04 |
+| Embeddings (knowledge base) | ~190,000 tokens | ~$0.004 | One-time; CI rebuilds only when source PDFs change (cached) | One-time; CI rebuilds only when source PDFs change (cached) |
 | **Total OpenAI** | | | **~$0.74/mo** | **~$7.04/mo** |
 
 *GPT-4o-mini pricing: $0.15 per 1M input tokens, $0.60 per 1M output tokens (May 2026)*
