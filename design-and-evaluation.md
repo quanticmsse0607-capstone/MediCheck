@@ -281,7 +281,7 @@ Service 2 calls Service 3 twice during the analysis workflow:
 2. **At analysis time (`POST /analyse`):** Calls `POST /explain` with the list of detected errors. Service 3 returns a grounded explanation and citations per `error_id`. These are merged into `AnalysisResult` rows before the response is returned.
 
 **Graceful degradation (NFR-02, NFR-18):**
-- All outbound Service 3 calls use an explicit 10-second timeout
+- All outbound Service 3 calls use an explicit timeout (configurable via `SERVICE3_TIMEOUT_SECONDS`, default 30 seconds)
 - `requests.Timeout` and `requests.ConnectionError` are caught; the partial response (explanations `null`, `rag_available: false`) is returned with HTTP 200 — not HTTP 503
 - This allows patients to access analysis results even when Service 3 is unavailable or cold-starting on Render
 - If `error_id` keys are missing from the Service 3 response, the gap is logged as a warning before the merge so the absence is visible in logs (anti-pattern M4)
@@ -443,7 +443,7 @@ Results are written to `tests/eval_results.csv`. Citation accuracy and notes are
 | Citation accuracy (yes + partial) | 15 / 16 = **94%** |
 | Citation accuracy (yes only) | 13 / 16 = **81%** |
 
-**Latency note:** The p95 of 8 863 ms is driven by a single outlier call (eval_010, 8 863 ms). The remaining 15 calls ranged from 4 062 ms to 5 823 ms. p50 of 4 988 ms is the more representative figure for typical request latency. All calls completed within the 10-second timeout. These figures reflect single-error evaluation cases measured before parallelisation was introduced. For multi-error bills, the `ThreadPoolExecutor` implementation means total latency is now approximately one LLM call duration regardless of error count.
+**Latency note:** The p95 of 8 863 ms is driven by a single outlier call (eval_010, 8 863 ms). The remaining 15 calls ranged from 4 062 ms to 5 823 ms. p50 of 4 988 ms is the more representative figure for typical request latency. All calls completed well within the 30-second timeout. These figures reflect single-error evaluation cases measured before parallelisation was introduced. For multi-error bills, the `ThreadPoolExecutor` implementation means total latency is now approximately one LLM call duration regardless of error count.
 
 **Groundedness outlier:** eval_009 scored 50/100. The judge flagged that the explanation invokes the No Surprises Act's qualifying payment amount (QPA) provision without clearly establishing its relevance to an in-network amount mismatch scenario. Dollar figures are correct. See Module 3 findings below.
 

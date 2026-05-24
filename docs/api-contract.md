@@ -213,7 +213,7 @@ The frontend triggers error detection after field confirmation. Service 2 runs a
 
 ### Response — HTTP 200 (partial — RAG timeout)
 
-When Service 3 does not respond within 10 seconds, Service 2 returns detection results with `explanation` set to `null`, `citations` as an empty array, and `rag_available` set to `false`. The frontend should display a retry option for explanations.
+When Service 3 does not respond within the configured timeout (`SERVICE3_TIMEOUT_SECONDS`, default 30 seconds), Service 2 returns detection results with `explanation` set to `null`, `citations` as an empty array, and `rag_available` set to `false`. The frontend should display a retry option for explanations.
 
 ```json
 {
@@ -418,7 +418,7 @@ Service 2 (Bill Analysis API) calls Service 3 (RAG & Letter Service) for two pur
 1. Fetching RAG-grounded explanations and citations for detected billing errors
 2. Generating dispute letter content
 
-Service 3 must respond within **10 seconds** (NFR-18). If it does not, Service 2 returns a partial response with `rag_available: false` — never a 500 error (NFR-02).
+Service 3 must respond within the configured timeout — `SERVICE3_TIMEOUT_SECONDS`, default **30 seconds** (NFR-18). If it does not, Service 2 returns a partial response with `rag_available: false` — never a 500 error (NFR-02).
 
 | Endpoint | Method | Called From | Purpose |
 |---|---|---|---|
