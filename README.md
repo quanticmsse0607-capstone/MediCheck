@@ -63,8 +63,7 @@ medicheck/
 │   ├── coverage_report.md              # Service 2 test coverage detail
 │   ├── medicheck_cost_analysis.md      # Deployment and operating cost analysis
 │   ├── MediCheck_Proposal_v4.pdf       # Project proposal (submitted deliverable)
-│   ├── diagrams/                       # UML and architecture diagrams (.drawio + exports)
-│   └── postman/                        # Postman collection (placeholder)
+│   └── diagrams/                       # UML and architecture diagrams (.drawio + exports)
 ├── services/
 │   ├── service1-frontend/              # Service 1 — React + Vite SPA
 │   ├── service2-billanalysis/          # Service 2 — Flask Bill Analysis API
