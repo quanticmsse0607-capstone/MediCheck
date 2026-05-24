@@ -335,7 +335,7 @@ pytest tests/ -v
 
 **10 tests** that run the full user flow against live services on `localhost`. Unlike the per-service tests above, these make real HTTP calls and trigger real OpenAI API calls through Service 3. They are the only tests in the suite that verify the two services work correctly together.
 
-**Setup:** Service 2 runs with `USE_MOCK_OCR=true` (no AWS required) and `SERVICE3_URL=http://localhost:5002`. Service 3 runs with a real `OPENAI_API_KEY` and loads the committed ChromaDB embeddings from `data/chroma_db/`.
+**Setup:** Service 2 runs with `USE_MOCK_OCR=true` (no AWS required) and `SERVICE3_URL=http://localhost:5002`. Service 3 runs with a real `OPENAI_API_KEY`; the ChromaDB vector store (`data/chroma_db/`, gitignored) is built by `ingest.py` in CI before Service 3 starts (cached via `actions/cache@v4` keyed on the raw source PDFs — only rebuilt when source documents change).
 
 | Class | Tests | What it covers |
 |---|---|---|
@@ -397,6 +397,7 @@ The CI pipeline (`.github/workflows/ci-cd.yml`) runs on every pull request and p
 
 **Integration job (push to `main` only, after Service 2 and Service 3 pass):**
 - Generates a synthetic test bill PDF using reportlab
+- Restores ChromaDB vector store from cache (keyed on `data/raw/**`); runs `ingest.py` only if source PDFs have changed
 - Starts Service 3 on `localhost:5002` via `nohup` with real `OPENAI_API_KEY`; waits up to 150s for `/health`
 - Starts Service 2 on `localhost:5001` via `nohup` with `USE_MOCK_OCR=true`; waits up to 60s for `/health`
 - Runs `pytest tests/integration/ -v` — all 10 cross-service tests must pass
