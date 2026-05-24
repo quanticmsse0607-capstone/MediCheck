@@ -1,9 +1,9 @@
 """
 RAG client — HTTP client for Service 3 (explanation + letter generation).
 
-NFR-18: Every outbound call to Service 3 MUST specify an explicit 10-second timeout.
-        Missing timeout = code review failure.
-NFR-02: If Service 3 does not respond in 10 seconds, return partial response.
+NFR-18: Every outbound call to Service 3 MUST specify an explicit timeout.
+        Timeout is configurable via SERVICE3_TIMEOUT_SECONDS (default: 30s).
+NFR-02: If Service 3 does not respond in time, return partial response.
         Caller receives rag_available: false — never a 500 error.
 """
 
@@ -29,7 +29,7 @@ class RAGClient:
     @property
     def timeout(self) -> int:
         if self._timeout is None:
-            self._timeout = current_app.config["SERVICE3_TIMEOUT_SECONDS"]  # always 10
+            self._timeout = current_app.config["SERVICE3_TIMEOUT_SECONDS"]
         return self._timeout
 
     def get_explanations(self, session_id: str, errors: list[dict]) -> dict:
@@ -51,7 +51,7 @@ class RAGClient:
             response = requests.post(
                 f"{self.base_url}/explain",
                 json={"session_id": session_id, "errors": errors},
-                timeout=self.timeout,  # NFR-18: explicit 10-second timeout — ALWAYS present
+                timeout=self.timeout,  # NFR-18: explicit timeout — ALWAYS present
             )
             response.raise_for_status()
             data = response.json()
@@ -107,7 +107,7 @@ class RAGClient:
             response = requests.post(
                 f"{self.base_url}/draft-letter",
                 json={"session_id": session_id, "analysis": analysis_data},
-                timeout=self.timeout,  # NFR-18: explicit 10-second timeout — ALWAYS present
+                timeout=self.timeout,  # NFR-18: explicit timeout — ALWAYS present
             )
             response.raise_for_status()
             data = response.json()

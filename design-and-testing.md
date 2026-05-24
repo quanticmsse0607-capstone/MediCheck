@@ -379,7 +379,7 @@ pytest tests/integration/ -v
 | ChromaDB | Module-level singletons reset between tests; `_vectorstore` mocked |
 | Database | In-memory SQLite (`sqlite:///:memory:`) for all integration tests |
 
-All test data is synthetic — no real patient or billing information (NFR-06).
+**HIPAA compliance — synthetic data only (NFR-06):** No real patient or billing information is used at any stage of testing or demonstration. All patient names, dates of birth, addresses, member IDs, and policy numbers are generated programmatically using the Python `Faker` library (`test-data/generate_test_data.py`). Provider names and NPI numbers used are either publicly available from the CMS NPPES registry or explicitly marked as synthetic (`NPI: 9999000001` etc.). The three demo scenarios (Scenario A — BCBS SC / Atrium Health, Scenario B — Ambetter / MUSC Health, Scenario C — Molina / Prisma Health) inject billing errors by design — CPT codes, dollar amounts, and error types were specified before any test documents were generated.
 
 ---
 

@@ -60,7 +60,7 @@ export default function ErrorReport() {
         Checking for duplicate charges, rate outliers, EOB mismatches,
         and No Surprises Act violations.
       </p>
-      <p className="text-gray-400 text-xs">This may take up to 15 seconds.</p>
+      <p className="text-gray-400 text-xs">This may take up to 30 seconds.</p>
     </div>
   )
 
