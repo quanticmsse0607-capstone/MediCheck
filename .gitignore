@@ -237,5 +237,6 @@ start-medicheck.ps1
 # Temporary Scope documents
 claude.md
 MediCheck_DevGuide_v3.pdf
+MediCheck_TestData_Spec.pdf
 # Claude Code
 .claude/

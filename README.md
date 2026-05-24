@@ -94,7 +94,6 @@ medicheck/
 ├── deployed.md                         # Live Render service URLs
 ├── requirements.md                     # User stories, system requirements, traceability matrix
 ├── SERVICE2_EXPLAINED.md               # Service 2 architecture explanation
-├── MediCheck_TestData_Spec.pdf         # Synthetic test data specification (three demo scenarios)
 ├── design-and-testing.md               # Architecture, UML, patterns, test results (Sprint 5)
 ├── design-and-evaluation.md            # RAG evaluation results and proposal deviations (Sprint 5)
 ├── ai-tooling.md                       # AI tools used during development
@@ -355,13 +354,6 @@ Always branch from the latest `main`. Delete feature branches after merging.
 
 ---
 
-## Sprint Demo Recordings
+## Final Presentation
 
-| Sprint | Recording |
-|--------|-----------|
-| Sprint 1 | *(to be added)* |
-| Sprint 2 | *(to be added)* |
-| Sprint 3 | *(to be added)* |
-| Sprint 4 | *(to be added)* |
-| Sprint 5 | *(to be added)* |
-| Sprint 6 | *(final presentation — to be added)* |
+*(to be added)*
