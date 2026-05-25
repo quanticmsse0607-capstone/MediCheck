@@ -163,7 +163,9 @@ class TestGetReport:
 
 class TestLetterEndpoint:
 
-    def test_letter_returns_base64_docx_and_pdf(self, app, client, analysed_session, mocker):
+    def test_letter_returns_base64_docx_and_pdf(
+        self, app, client, analysed_session, mocker
+    ):
         """FR-21: both formats returned in single response as base64."""
         mocker.patch(
             "routes.letter.rag_client.generate_letter",
@@ -181,7 +183,7 @@ class TestLetterEndpoint:
 
         # Verify both are valid base64
         docx_bytes = base64.b64decode(data["downloads"]["docx"])
-        pdf_bytes  = base64.b64decode(data["downloads"]["pdf"])
+        pdf_bytes = base64.b64decode(data["downloads"]["pdf"])
         assert len(docx_bytes) > 0
         assert len(pdf_bytes) > 0
 
@@ -227,8 +229,7 @@ class TestLetterEndpoint:
         assert "content_types" in data
         assert "filenames" in data
         assert data["content_types"]["docx"] == (
-            "application/vnd.openxmlformats-officedocument"
-            ".wordprocessingml.document"
+            "application/vnd.openxmlformats-officedocument" ".wordprocessingml.document"
         )
         assert data["content_types"]["pdf"] == "application/pdf"
         assert data["filenames"]["docx"].endswith(".docx")
@@ -267,6 +268,7 @@ class TestLetterEndpoint:
             },
         )
         import io
+
         pdf = (
             b"%PDF-1.4\n1 0 obj\n<< >>\nendobj\n"
             b"trailer\n<< /Root 1 0 R >>\nstartxref\n0\n%%EOF"
@@ -279,16 +281,19 @@ class TestLetterEndpoint:
         sid = r.get_json()["session_id"]
 
         # Confirm but don't analyse
-        client.post("/confirm", json={
-            "session_id": sid,
-            "confirmed_fields": {
-                "patient_name": "Test",
-                "provider_name": "Test",
-                "date_of_service": "2025-01-01",
-                "total_billed": 100.0,
-                "line_items": [],
+        client.post(
+            "/confirm",
+            json={
+                "session_id": sid,
+                "confirmed_fields": {
+                    "patient_name": "Test",
+                    "provider_name": "Test",
+                    "date_of_service": "2025-01-01",
+                    "total_billed": 100.0,
+                    "line_items": [],
+                },
             },
-        })
+        )
 
         r = client.post("/letter", json={"session_id": sid})
         assert r.status_code == 404
