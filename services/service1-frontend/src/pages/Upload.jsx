@@ -16,6 +16,17 @@ export default function Upload() {
   const [eobFile, setEobFile] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [sessionInput, setSessionInput] = useState('')
+  const [sessionError, setSessionError] = useState(null)
+
+  const handleRetrieve = () => {
+    const id = sessionInput.trim()
+    if (!id) {
+      setSessionError('Please enter a session ID.')
+      return
+    }
+    navigate(`/report/${id}`)
+  }
 
   const handleUpload = async () => {
     if (!billFile) {
@@ -89,8 +100,8 @@ export default function Upload() {
                         rounded-lg px-4 py-3 mb-6 text-sm text-amber-800">
           <span className="mt-0.5">⚠</span>
           <span>
-            Your session ID is the only way to access your results. Save it before
-            proceeding. No account or email address is required.
+            Save your session ID to retrieve your results later. No account or
+            email address is required.
           </span>
         </div>
 
@@ -118,6 +129,39 @@ export default function Upload() {
             This may take up to 60 seconds. Please do not close this page.
           </p>
         )}
+
+        {/* Divider */}
+        <div className="flex items-center gap-3 my-6">
+          <div className="flex-1 h-px bg-gray-200" />
+          <span className="text-xs text-gray-400 uppercase tracking-wide">or retrieve existing results</span>
+          <div className="flex-1 h-px bg-gray-200" />
+        </div>
+
+        {/* Retrieve session — FR-27 */}
+        <div className="flex flex-col gap-2">
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={sessionInput}
+              onChange={(e) => { setSessionInput(e.target.value); setSessionError(null) }}
+              onKeyDown={(e) => e.key === 'Enter' && handleRetrieve()}
+              placeholder="Enter your session ID"
+              className="flex-1 border border-gray-300 rounded-lg px-4 py-3 text-sm
+                         font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <button
+              onClick={handleRetrieve}
+              className="bg-white border border-gray-300 hover:bg-gray-50 text-gray-700
+                         font-semibold py-3 px-5 rounded-lg text-sm transition-colors
+                         whitespace-nowrap"
+            >
+              Retrieve Results
+            </button>
+          </div>
+          {sessionError && (
+            <p className="text-xs text-red-600">{sessionError}</p>
+          )}
+        </div>
 
       </div>
     </div>
