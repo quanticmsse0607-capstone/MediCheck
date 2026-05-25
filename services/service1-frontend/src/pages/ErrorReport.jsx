@@ -123,12 +123,10 @@ export default function ErrorReport() {
 
       {/* RAG unavailable notice */}
       {results?.rag_available === false && (
-        <div className="flex items-center gap-2 bg-amber-50 border border-amber-200
-                        rounded-lg px-4 py-3 mb-4 text-sm text-amber-700">
-          <span>Explanations are temporarily unavailable.</span>
-          <button className="underline ml-1" onClick={() => window.location.reload()}>
-            Retry
-          </button>
+        <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-4
+                        text-sm text-amber-700">
+          Explanations are temporarily unavailable — your detected errors and savings
+          estimates are not affected. You can still generate your dispute letter below.
         </div>
       )}
 
