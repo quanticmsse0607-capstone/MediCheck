@@ -11,32 +11,55 @@ import { generateLetter, ApiError } from '../api/medicheck'
  *  - Action buttons: Flexbox row
  *
  * Requirements: FR-21, FR-22, FR-23, NFR-22
+ *
+ * Letters are returned as base64-encoded strings from POST /letter.
+ * Downloads are triggered client-side via Blob + createObjectURL —
+ * no file server or download endpoint needed (works on Render free tier).
  */
 export default function DisputeLetter() {
   const { sessionId } = useParams()
   const navigate = useNavigate()
-  const [downloads, setDownloads] = useState(null)
+  const [letterData, setLetterData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  // Add this helper function at the top of the component
-  const proxyUrl = (url) => {
-    if (!url) return '#'
-    try {
-      return `/api${new URL(url).pathname}`
-    } catch {
-      return '#'
-    }
-  }
 
   useEffect(() => {
     generateLetter(sessionId)
       .then((data) => {
-        if (data.downloads) setDownloads(data.downloads)
-        else setError('Dispute letter not yet available. Please generate it from the error report.')
+        if (data.downloads) {
+          setLetterData(data)
+        } else {
+          setError('Dispute letter not yet available. Please generate it from the error report.')
+        }
       })
       .catch((err) => setError(err instanceof ApiError ? err.message : 'Could not retrieve letter.'))
       .finally(() => setLoading(false))
   }, [sessionId])
+
+  /**
+   * Decode base64 string and trigger browser download.
+   * Works in all modern browsers — no server required.
+   */
+  const downloadFile = (base64Data, filename, contentType) => {
+    try {
+      const bytes = atob(base64Data)
+      const array = new Uint8Array(bytes.length)
+      for (let i = 0; i < bytes.length; i++) {
+        array[i] = bytes.charCodeAt(i)
+      }
+      const blob = new Blob([array], { type: contentType })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      console.error('Download failed:', e)
+    }
+  }
 
   if (loading) return (
     <div className="flex flex-col items-center justify-center py-24 gap-3">
@@ -49,13 +72,17 @@ export default function DisputeLetter() {
       <div className="bg-red-50 border border-red-200 rounded-lg px-6 py-5 text-sm text-red-700">
         <p className="font-semibold mb-1">Letter unavailable</p>
         <p>{error}</p>
-        <button onClick={() => navigate(`/report/${sessionId}`)}
-          className="mt-4 underline text-xs">
+        <button
+          onClick={() => navigate(`/report/${sessionId}`)}
+          className="mt-4 underline text-xs"
+        >
           Back to error report
         </button>
       </div>
     </div>
   )
+
+  const { downloads, content_types, filenames } = letterData
 
   return (
     // Flexbox column — centred content
@@ -79,32 +106,38 @@ export default function DisputeLetter() {
           <span className="font-mono font-medium text-gray-700">{sessionId}</span>
         </div>
 
-        {/* Download buttons — CSS Grid, two equal columns — FR-21, FR-23 */}
+        {/* Download buttons — CSS Grid, two equal columns — FR-21 */}
         <div className="grid grid-cols-2 gap-4 mb-8">
-          <a
-            href={proxyUrl(downloads?.docx)}
-            download
+          <button
+            onClick={() => downloadFile(
+              downloads.docx,
+              filenames?.docx ?? 'dispute_letter.docx',
+              content_types?.docx ?? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            )}
             className="flex flex-col items-center justify-center bg-blue-700
                        hover:bg-blue-600 text-white font-semibold py-5 px-4
-                       rounded-lg transition-colors text-center gap-2"
+                       rounded-lg transition-colors text-center gap-2 cursor-pointer"
           >
             <span className="text-2xl">📝</span>
             <span className="text-sm">Download Word</span>
             <span className="text-xs font-normal opacity-75">Editable — recommended</span>
-          </a>
+          </button>
 
-          <a
-            href={proxyUrl(downloads?.pdf)}
-            download
+          <button
+            onClick={() => downloadFile(
+              downloads.pdf,
+              filenames?.pdf ?? 'dispute_letter.pdf',
+              content_types?.pdf ?? 'application/pdf'
+            )}
             className="flex flex-col items-center justify-center bg-white
                        border-2 border-blue-700 text-blue-700 hover:bg-blue-50
                        font-semibold py-5 px-4 rounded-lg transition-colors
-                       text-center gap-2"
+                       text-center gap-2 cursor-pointer"
           >
             <span className="text-2xl">🖨️</span>
             <span className="text-sm">Download PDF</span>
             <span className="text-xs font-normal opacity-75">Ready to print or attach</span>
-          </a>
+          </button>
         </div>
 
         {/* What's in the letter — Flexbox column — FR-22 */}

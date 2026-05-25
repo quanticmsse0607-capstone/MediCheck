@@ -1,6 +1,8 @@
 """
-Integration tests for GET /report/<session_id> and GET /download/<session_id>/<filename>.
-Also covers the POST /letter re-serve path (FR-23: existing letter returned without regeneration).
+Integration tests for GET /report/<session_id> and POST /letter.
+
+Updated for base64 letter response — no file storage, no download endpoints.
+Letters are returned as base64-encoded strings in the POST /letter response.
 
 NFR-26: Service 3 is always mocked — no live HTTP calls.
 """
@@ -8,7 +10,7 @@ NFR-26: Service 3 is always mocked — no live HTTP calls.
 import json
 import os
 import sys
-import tempfile
+import base64
 
 import pytest
 
@@ -142,119 +144,183 @@ class TestGetReport:
         r = client.get(f"/report/{sid}")
         assert r.get_json()["rag_available"] is False
 
-    def test_includes_download_urls_when_letter_exists(
-        self, app, client, analysed_session
+    def test_no_downloads_key_in_report(self, client, analysed_session):
+        """
+        GET /report no longer returns downloads — letters are base64 in
+        POST /letter response. Report only returns analysis results.
+        """
+        r = client.get(f"/report/{analysed_session}")
+        data = r.get_json()
+        assert r.status_code == 200
+        # downloads key is NOT expected in GET /report response
+        assert "downloads" not in data
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# POST /letter — base64 response (no disk storage)
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class TestLetterEndpoint:
+
+    def test_letter_returns_base64_docx_and_pdf(
+        self, app, client, analysed_session, mocker
     ):
+        """FR-21: both formats returned in single response as base64."""
+        mocker.patch(
+            "routes.letter.rag_client.generate_letter",
+            return_value={"success": False, "letter_content": None},
+        )
+
+        r = client.post("/letter", json={"session_id": analysed_session})
+        assert r.status_code == 200
+        data = r.get_json()
+
+        assert data["status"] == "letter_generated"
+        assert "downloads" in data
+        assert "docx" in data["downloads"]
+        assert "pdf" in data["downloads"]
+
+        # Verify both are valid base64
+        docx_bytes = base64.b64decode(data["downloads"]["docx"])
+        pdf_bytes = base64.b64decode(data["downloads"]["pdf"])
+        assert len(docx_bytes) > 0
+        assert len(pdf_bytes) > 0
+
+    def test_letter_docx_is_valid_zip(self, app, client, analysed_session, mocker):
+        """Word .docx files are ZIP archives — verify magic bytes."""
+        mocker.patch(
+            "routes.letter.rag_client.generate_letter",
+            return_value={"success": False, "letter_content": None},
+        )
+
+        r = client.post("/letter", json={"session_id": analysed_session})
+        data = r.get_json()
+        docx_bytes = base64.b64decode(data["downloads"]["docx"])
+
+        # .docx is a ZIP — magic bytes PK
+        assert docx_bytes[:2] == b"PK"
+
+    def test_letter_pdf_has_pdf_header(self, app, client, analysed_session, mocker):
+        """PDF files start with %PDF."""
+        mocker.patch(
+            "routes.letter.rag_client.generate_letter",
+            return_value={"success": False, "letter_content": None},
+        )
+
+        r = client.post("/letter", json={"session_id": analysed_session})
+        data = r.get_json()
+        pdf_bytes = base64.b64decode(data["downloads"]["pdf"])
+
+        assert pdf_bytes[:4] == b"%PDF"
+
+    def test_letter_response_includes_filenames_and_content_types(
+        self, app, client, analysed_session, mocker
+    ):
+        """Response includes filenames and MIME types for frontend download."""
+        mocker.patch(
+            "routes.letter.rag_client.generate_letter",
+            return_value={"success": False, "letter_content": None},
+        )
+
+        r = client.post("/letter", json={"session_id": analysed_session})
+        data = r.get_json()
+
+        assert "content_types" in data
+        assert "filenames" in data
+        assert data["content_types"]["docx"] == (
+            "application/vnd.openxmlformats-officedocument" ".wordprocessingml.document"
+        )
+        assert data["content_types"]["pdf"] == "application/pdf"
+        assert data["filenames"]["docx"].endswith(".docx")
+        assert data["filenames"]["pdf"].endswith(".pdf")
+
+    def test_letter_advances_session_to_letter_generated(
+        self, app, client, analysed_session, mocker
+    ):
+        """FR-26: session status advances to letter_generated."""
+        mocker.patch(
+            "routes.letter.rag_client.generate_letter",
+            return_value={"success": False, "letter_content": None},
+        )
+
+        client.post("/letter", json={"session_id": analysed_session})
+
         with app.app_context():
-            with tempfile.TemporaryDirectory() as tmpdir:
-                docx_path = os.path.join(tmpdir, "letter.docx")
-                pdf_path = os.path.join(tmpdir, "letter.pdf")
-                open(docx_path, "wb").close()
-                open(pdf_path, "wb").close()
+            session = _db.session.get(Session, analysed_session)
+            assert session.status == SessionStatus.LETTER_GENERATED
 
-                _db.session.add(
-                    DisputeLetter(
-                        session_id=analysed_session,
-                        docx_path=docx_path,
-                        pdf_path=pdf_path,
-                    )
-                )
-                _db.session.commit()
+    def test_letter_404_for_unknown_session(self, client):
+        r = client.post("/letter", json={"session_id": "fake-uuid"})
+        assert r.status_code == 404
+        assert r.get_json()["error_code"] == "SESSION_NOT_FOUND"
 
-                r = client.get(f"/report/{analysed_session}")
-                data = r.get_json()
-                assert "downloads" in data
-                assert "docx" in data["downloads"]
-                assert "pdf" in data["downloads"]
+    def test_letter_404_before_analyse(self, app, client, mocker):
+        """NFR-17: letter before analyse returns 404."""
+        mocker.patch(
+            "routes.upload.ocr_service.extract",
+            return_value={
+                "patient_name": "Test",
+                "provider_name": "Test",
+                "date_of_service": "2025-01-01",
+                "total_billed": 100.0,
+                "line_items": [],
+            },
+        )
+        import io
 
+        pdf = (
+            b"%PDF-1.4\n1 0 obj\n<< >>\nendobj\n"
+            b"trailer\n<< /Root 1 0 R >>\nstartxref\n0\n%%EOF"
+        )
+        r = client.post(
+            "/upload",
+            data={"bill": (io.BytesIO(pdf), "bill.pdf")},
+            content_type="multipart/form-data",
+        )
+        sid = r.get_json()["session_id"]
 
-# ══════════════════════════════════════════════════════════════════════════════
-# GET /download/<session_id>/<filename>
-# ══════════════════════════════════════════════════════════════════════════════
+        # Confirm but don't analyse
+        client.post(
+            "/confirm",
+            json={
+                "session_id": sid,
+                "confirmed_fields": {
+                    "patient_name": "Test",
+                    "provider_name": "Test",
+                    "date_of_service": "2025-01-01",
+                    "total_billed": 100.0,
+                    "line_items": [],
+                },
+            },
+        )
 
-
-class TestDownloadFile:
-
-    def test_invalid_filename_returns_400(self, client, analysed_session):
-        r = client.get(f"/download/{analysed_session}/evil.exe")
-        assert r.status_code == 400
-        assert r.get_json()["error_code"] == "INVALID_FILENAME"
-
-    def test_404_when_no_letter_record(self, client, analysed_session):
-        r = client.get(f"/download/{analysed_session}/letter.docx")
+        r = client.post("/letter", json={"session_id": sid})
         assert r.status_code == 404
         assert r.get_json()["error_code"] == "NO_ANALYSIS_RESULTS"
 
-    def test_404_when_file_missing_from_disk(self, app, client, analysed_session):
-        with app.app_context():
-            _db.session.add(
-                DisputeLetter(
-                    session_id=analysed_session,
-                    docx_path="/nonexistent/letter.docx",
-                    pdf_path="/nonexistent/letter.pdf",
-                )
-            )
-            _db.session.commit()
-
-        r = client.get(f"/download/{analysed_session}/letter.docx")
-        assert r.status_code == 404
-        assert r.get_json()["error_code"] == "FILE_NOT_FOUND"
-
-    def test_serves_file_when_present(self, app, client, analysed_session):
-        with app.app_context():
-            with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as f:
-                f.write(b"PK fake docx content")
-                docx_path = f.name
-
-            _db.session.add(
-                DisputeLetter(
-                    session_id=analysed_session,
-                    docx_path=docx_path,
-                    pdf_path=docx_path,
-                )
-            )
-            _db.session.commit()
-
-        r = client.get(f"/download/{analysed_session}/letter.docx")
-        assert r.status_code == 200
-        # File left for OS cleanup — send_file holds handle open on Windows
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# POST /letter — re-serve existing letter (FR-23)
-# ══════════════════════════════════════════════════════════════════════════════
-
-
-class TestLetterReserve:
-
-    def test_returns_existing_letter_without_regenerating(
+    def test_letter_regenerates_on_second_call(
         self, app, client, analysed_session, mocker
     ):
-        """FR-23: second call to POST /letter returns existing files, no Service 3 call."""
-        with app.app_context():
-            with tempfile.TemporaryDirectory() as tmpdir:
-                docx_path = os.path.join(tmpdir, "letter.docx")
-                pdf_path = os.path.join(tmpdir, "letter.pdf")
-                open(docx_path, "wb").close()
-                open(pdf_path, "wb").close()
+        """
+        FR-23 updated: base64 approach regenerates on each call since
+        no files are stored. Both calls must return valid base64.
+        """
+        mock = mocker.patch(
+            "routes.letter.rag_client.generate_letter",
+            return_value={"success": False, "letter_content": None},
+        )
 
-                session = _db.session.get(Session, analysed_session)
-                session.status = SessionStatus.LETTER_GENERATED
-                _db.session.add(
-                    DisputeLetter(
-                        session_id=analysed_session,
-                        docx_path=docx_path,
-                        pdf_path=pdf_path,
-                    )
-                )
-                _db.session.commit()
+        r1 = client.post("/letter", json={"session_id": analysed_session})
+        assert r1.status_code == 200
 
-                generate_letter_mock = mocker.patch(
-                    "routes.letter.rag_client.generate_letter"
-                )
+        # Session is now LETTER_GENERATED — second call still works
+        r2 = client.post("/letter", json={"session_id": analysed_session})
+        assert r2.status_code == 200
 
-                r = client.post("/letter", json={"session_id": analysed_session})
+        d1 = r1.get_json()["downloads"]["docx"]
+        d2 = r2.get_json()["downloads"]["docx"]
 
-                assert r.status_code == 200
-                assert r.get_json()["status"] == "letter_generated"
-                generate_letter_mock.assert_not_called()
+        # Both are valid base64
+        assert len(base64.b64decode(d1)) > 0
+        assert len(base64.b64decode(d2)) > 0

@@ -1,19 +1,22 @@
 """
 POST /letter  — FR-21, FR-22, FR-23
-GET  /download/<session_id>/<filename> — serve generated files
+GET  /report/<session_id> — return analysis results + letter if generated
 
 Generates dispute letter in both Word (.docx) and PDF formats.
-Files are stored on disk and re-served without regeneration (FR-23).
+Returns files as base64-encoded strings in the response body — no disk
+storage required, works on Render free tier (no persistent disk needed).
 """
 
-import os
 import json
-from flask import Blueprint, request, jsonify, send_file, current_app
+import base64
+import logging
+from flask import Blueprint, request, jsonify, current_app
 from extensions import db
 from models import Session, ExtractedField, AnalysisResult, DisputeLetter, SessionStatus
 from services.rag_client import RAGClient
-from services.letter_builder import build_docx, build_pdf
+from services.letter_builder import build_docx_bytes, build_pdf_bytes
 
+logger = logging.getLogger(__name__)
 letter_bp = Blueprint("letter", __name__)
 rag_client = RAGClient()
 
@@ -25,12 +28,13 @@ ERR_NO_ANALYSIS_RESULTS = "NO_ANALYSIS_RESULTS"
 def generate_letter():
     """
     Generate dispute letter in Word and PDF formats.
-    Calls Service 3 to generate letter content, then formats locally.
-    Both files are stored and re-servable without repeating analysis (FR-23).
+    Returns both files as base64-encoded strings — no disk storage needed.
+    Frontend decodes and triggers browser download.
 
     Request JSON: { "session_id": "uuid" }
 
-    Response 200: session_id, status, downloads: { docx: url, pdf: url }
+    Response 200: session_id, status, downloads: { docx: base64, pdf: base64 },
+                  content_types: { docx: mime, pdf: mime }
     Response 404: SESSION_NOT_FOUND or NO_ANALYSIS_RESULTS
     """
 
@@ -38,7 +42,7 @@ def generate_letter():
     session_id = data.get("session_id")
 
     # ── 1. Validate session ───────────────────────────────────────────────────
-    session = db.session.get(Session, session_id)
+    session = Session.query.get(session_id)
     if not session:
         return _error(
             404,
@@ -47,7 +51,7 @@ def generate_letter():
             session_id,
         )
 
-    # ── 2. Check analysis results exist (NFR-17: HTTP 404 if no analysis) ─────
+    # ── 2. Check analysis results exist ───────────────────────────────────────
     results = AnalysisResult.query.filter_by(session_id=session_id).all()
     if session.status not in (SessionStatus.ANALYSED, SessionStatus.LETTER_GENERATED):
         return _error(
@@ -58,79 +62,73 @@ def generate_letter():
             session_id,
         )
 
-    # ── 3. If letter already generated, return existing download URLs (FR-23) ─
-    existing = DisputeLetter.query.filter_by(session_id=session_id).first()
-    if (
-        existing
-        and os.path.exists(existing.docx_path or "")
-        and os.path.exists(existing.pdf_path or "")
-    ):
-        return (
-            jsonify(
-                {
-                    "session_id": session_id,
-                    "status": "letter_generated",
-                    "downloads": {
-                        "docx": _download_url(session_id, "letter.docx"),
-                        "pdf": _download_url(session_id, "letter.pdf"),
-                    },
-                }
-            ),
-            200,
+    if not results:
+        return _error(
+            404,
+            ERR_NO_ANALYSIS_RESULTS,
+            "No analysis results found for this session. "
+            "Run POST /analyse before requesting a letter.",
+            session_id,
         )
 
-    # ── 4. Load data for letter ───────────────────────────────────────────────
+    # ── 3. Build analysis data for letter ─────────────────────────────────────
     extracted = ExtractedField.query.filter_by(session_id=session_id).first()
     analysis_data = {
         "session_id": session_id,
-        "patient_name": extracted.patient_name if extracted else "",
-        "provider_name": extracted.provider_name if extracted else "",
-        "date_of_service": extracted.date_of_service if extracted else "",
-        "errors": [r.to_dict() for r in results],
+        "patient_name": extracted.patient_name if extracted else None,
+        "provider_name": extracted.provider_name if extracted else None,
+        "date_of_service": extracted.date_of_service if extracted else None,
         "total_estimated_savings": sum(
             float(r.estimated_dollar_impact or 0) for r in results
         ),
+        "errors": [r.to_dict() for r in results],
     }
 
-    # ── 5. Call Service 3 to generate letter content ──────────────────────────
+    # ── 4. Call Service 3 for letter content ──────────────────────────────────
     rag_response = rag_client.generate_letter(session_id, analysis_data)
-    letter_content = rag_response.get("letter_content")
+    letter_content = (
+        rag_response.get("letter_content") if rag_response.get("success") else None
+    )
 
-    # ── 6. Build output directory ─────────────────────────────────────────────
-    output_dir = os.path.join(current_app.root_path, "generated_letters", session_id)
-    os.makedirs(output_dir, exist_ok=True)
-
-    docx_path = os.path.join(output_dir, "letter.docx")
-    pdf_path = os.path.join(output_dir, "letter.pdf")
-
-    # ── 7. Generate Word and PDF ──────────────────────────────────────────────
-    build_docx(analysis_data, letter_content, docx_path)
-    build_pdf(analysis_data, letter_content, pdf_path)
-
-    # ── 8. Persist letter record ──────────────────────────────────────────────
-    if existing:
-        existing.docx_path = docx_path
-        existing.pdf_path = pdf_path
-    else:
-        db.session.add(
-            DisputeLetter(
-                session_id=session_id,
-                docx_path=docx_path,
-                pdf_path=pdf_path,
-            )
+    # ── 5. Generate letter in memory (no disk required) ───────────────────────
+    try:
+        docx_bytes = build_docx_bytes(analysis_data, letter_content)
+        pdf_bytes = build_pdf_bytes(analysis_data, letter_content)
+    except Exception as exc:
+        logger.error(
+            "Letter generation failed for session=%s: %s",
+            session_id,
+            exc,
+            exc_info=True,
+        )
+        return _error(
+            500,
+            "LETTER_BUILD_FAILED",
+            "Letter could not be generated. Please try again.",
+            session_id,
         )
 
+    # ── 6. Advance session status ─────────────────────────────────────────────
     session.status = SessionStatus.LETTER_GENERATED
     db.session.commit()
 
+    # ── 7. Return base64-encoded files ────────────────────────────────────────
     return (
         jsonify(
             {
                 "session_id": session_id,
                 "status": "letter_generated",
                 "downloads": {
-                    "docx": _download_url(session_id, "letter.docx"),
-                    "pdf": _download_url(session_id, "letter.pdf"),
+                    "docx": base64.b64encode(docx_bytes).decode("utf-8"),
+                    "pdf": base64.b64encode(pdf_bytes).decode("utf-8"),
+                },
+                "content_types": {
+                    "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    "pdf": "application/pdf",
+                },
+                "filenames": {
+                    "docx": f"dispute_letter_{session_id[:8]}.docx",
+                    "pdf": f"dispute_letter_{session_id[:8]}.pdf",
                 },
             }
         ),
@@ -143,14 +141,9 @@ def get_report(session_id: str):
     """
     GET /report/<session_id>
     Returns analysis results for an existing session.
-    Used by Service 1 ErrorReport page to check if session is already analysed
-    before calling POST /analyse again (prevents duplicate analysis).
-
-    Response 200: session_id, status, total_errors, total_estimated_savings,
-                  all_clear, rag_available, errors[], downloads (if letter exists)
-    Response 404: SESSION_NOT_FOUND
+    Used by Service 1 ErrorReport page to check if already analysed.
     """
-    session = db.session.get(Session, session_id)
+    session = Session.query.get(session_id)
     if not session:
         return _error(
             404,
@@ -162,80 +155,25 @@ def get_report(session_id: str):
     results = AnalysisResult.query.filter_by(session_id=session_id).all()
     total_savings = sum(float(r.estimated_dollar_impact or 0) for r in results)
 
-    response = {
-        "session_id": session_id,
-        "status": session.status,
-        "total_errors": len(results),
-        "total_estimated_savings": total_savings,
-        "all_clear": len(results) == 0,
-        "rag_available": (
-            all(r.explanation is not None for r in results) if results else True
+    return (
+        jsonify(
+            {
+                "session_id": session_id,
+                "status": session.status,
+                "total_errors": len(results),
+                "total_estimated_savings": total_savings,
+                "all_clear": len(results) == 0,
+                "rag_available": (
+                    all(r.explanation is not None for r in results) if results else True
+                ),
+                "errors": [r.to_dict() for r in results],
+            }
         ),
-        "errors": [r.to_dict() for r in results],
-    }
-
-    # Include download URLs if letter already generated (FR-23)
-    letter = DisputeLetter.query.filter_by(session_id=session_id).first()
-    if letter and os.path.exists(letter.docx_path or ""):
-        response["downloads"] = {
-            "docx": _download_url(session_id, "letter.docx"),
-            "pdf": _download_url(session_id, "letter.pdf"),
-        }
-
-    return jsonify(response), 200
-
-
-@letter_bp.get("/download/<session_id>/<filename>")
-def download_file(session_id: str, filename: str):
-    """
-    Serve a generated letter file.
-    Both formats are retrievable without re-running analysis (FR-23).
-    """
-    if filename not in ("letter.docx", "letter.pdf"):
-        return _error(
-            400,
-            "INVALID_FILENAME",
-            "filename must be letter.docx or letter.pdf",
-            session_id,
-        )
-
-    letter = DisputeLetter.query.filter_by(session_id=session_id).first()
-    if not letter:
-        return _error(
-            404,
-            ERR_NO_ANALYSIS_RESULTS,
-            "No letter found for this session.",
-            session_id,
-        )
-
-    path = letter.docx_path if filename == "letter.docx" else letter.pdf_path
-
-    if not path or not os.path.exists(path):
-        return _error(
-            404, "FILE_NOT_FOUND", "Letter file not found on server.", session_id
-        )
-
-    mimetype = (
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        if filename == "letter.docx"
-        else "application/pdf"
-    )
-
-    return send_file(
-        path,
-        mimetype=mimetype,
-        as_attachment=True,
-        download_name=filename,
+        200,
     )
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
-
-
-def _download_url(session_id: str, filename: str) -> str:
-    """Build absolute download URL (agreed decision: full absolute URLs)."""
-    base = current_app.config.get("SERVICE2_BASE_URL", "http://localhost:5000")
-    return f"{base}/download/{session_id}/{filename}"
 
 
 def _error(status: int, code: str, message: str, session_id=None):
