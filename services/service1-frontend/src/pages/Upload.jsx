@@ -55,14 +55,38 @@ export default function Upload() {
       <div className="w-full max-w-2xl">
 
         {/* Hero — Flexbox column, centred text */}
-        <div className="flex flex-col items-center text-center mb-10">
+        <div className="flex flex-col items-center text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-3">
-            Check your medical bill for errors in 30 seconds
+            Check your medical bill for errors in 60 seconds
           </h1>
-          <p className="text-gray-500 text-base max-w-lg">
-            Upload your provider bill and optional EOB. MediCheck detects billing errors
-            and generates a dispute letter — no medical expertise required.
+          <p className="text-gray-500 text-base max-w-xl">
+            80% of US medical bills contain errors, costing patients an estimated $68 billion
+            annually. Upload your provider bill and optional Explanation of Benefits.
           </p>
+          <p className="text-gray-500 text-base max-w-xl mt-3">
+            MediCheck checks for duplicate charges, Medicare rate outliers, EOB mismatches,
+            and No Surprises Act violations, then generates a ready-to-send dispute letter.
+            Free to use. No account required.
+          </p>
+        </div>
+
+        {/* How it works — 3 steps */}
+        <div className="grid grid-cols-3 gap-4 mb-8 text-center">
+          <div className="flex flex-col items-center gap-1">
+            <span className="text-2xl">📄</span>
+            <span className="text-xs font-semibold text-gray-700">1. Upload</span>
+            <span className="text-xs text-gray-400">Your bill and optional EOB</span>
+          </div>
+          <div className="flex flex-col items-center gap-1">
+            <span className="text-2xl">🔍</span>
+            <span className="text-xs font-semibold text-gray-700">2. Review</span>
+            <span className="text-xs text-gray-400">Confirm extracted fields</span>
+          </div>
+          <div className="flex flex-col items-center gap-1">
+            <span className="text-2xl">📬</span>
+            <span className="text-xs font-semibold text-gray-700">3. Dispute</span>
+            <span className="text-xs text-gray-400">Download your letter</span>
+          </div>
         </div>
 
         {/* Pilot notice */}
