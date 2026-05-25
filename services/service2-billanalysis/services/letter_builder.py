@@ -10,8 +10,12 @@ FR-22 required elements — all must be present or result = system defect:
   - numbered list of every error (CPT, billed amount, overcharge, regulatory citation)
   - total estimated overcharge
   - formal dispute request paragraph
+
+In-memory versions (build_docx_bytes, build_pdf_bytes) added for Render
+deployment — no disk storage required, works on free tier.
 """
 
+import io
 import os
 from datetime import date
 from docx import Document
@@ -24,27 +28,68 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib import colors
 
 
+# ── In-memory builders (preferred — no disk required) ─────────────────────────
+
+
+def build_docx_bytes(analysis_data: dict, letter_content: str | None) -> bytes:
+    """
+    Generate dispute letter as Word document and return bytes.
+    No disk write — works on Render free tier.
+    """
+    buffer = io.BytesIO()
+    _build_docx_to_stream(analysis_data, letter_content, buffer)
+    return buffer.getvalue()
+
+
+def build_pdf_bytes(analysis_data: dict, letter_content: str | None) -> bytes:
+    """
+    Generate dispute letter as PDF and return bytes.
+    No disk write — works on Render free tier.
+    """
+    buffer = io.BytesIO()
+    _build_pdf_to_stream(analysis_data, letter_content, buffer)
+    return buffer.getvalue()
+
+
+# ── File-based builders (kept for backward compatibility) ─────────────────────
+
+
 def build_docx(analysis_data: dict, letter_content: str | None, output_path: str):
-    """
-    Generate a professionally formatted dispute letter as a Word document.
-    Uses python-docx. The Word version is fully editable (US-005 AC4).
-    """
+    """Write dispute letter as Word document to output_path."""
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    with open(output_path, "wb") as f:
+        f.write(build_docx_bytes(analysis_data, letter_content))
+
+
+def build_pdf(analysis_data: dict, letter_content: str | None, output_path: str):
+    """Write dispute letter as PDF to output_path."""
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    with open(output_path, "wb") as f:
+        f.write(build_pdf_bytes(analysis_data, letter_content))
+
+
+# ── Core document builders ─────────────────────────────────────────────────────
+
+
+def _build_docx_to_stream(
+    analysis_data: dict, letter_content: str | None, stream: io.BytesIO
+):
+    """Build Word document into a BytesIO stream."""
     doc = Document()
 
-    # ── Page margins ──────────────────────────────────────────────────────────
     for section in doc.sections:
         section.top_margin = Inches(1.0)
         section.bottom_margin = Inches(1.0)
         section.left_margin = Inches(1.25)
         section.right_margin = Inches(1.25)
 
-    # ── Patient header ────────────────────────────────────────────────────────
     patient_name = analysis_data.get("patient_name") or "[Patient Name]"
     provider_name = analysis_data.get("provider_name") or "[Provider Name]"
     date_of_service = analysis_data.get("date_of_service") or "[Date of Service]"
     session_id = analysis_data.get("session_id", "")
     today = date.today().strftime("%B %d, %Y")
     total_savings = analysis_data.get("total_estimated_savings", 0.0)
+    errors = analysis_data.get("errors", [])
 
     # Patient address block
     p = doc.add_paragraph()
@@ -69,21 +114,17 @@ def build_docx(analysis_data: dict, letter_content: str | None, output_path: str
     ).bold = True
     doc.add_paragraph()
 
-    # Salutation
     doc.add_paragraph("Dear Billing Department,")
     doc.add_paragraph()
 
-    # Opening paragraph
-    opening = (
+    doc.add_paragraph(
         f"I am writing to formally dispute charges on the above-referenced bill "
         f"totalling ${total_savings:,.2f}. After careful review of the itemised "
         f"charges, I have identified the following billing errors:"
     )
-    doc.add_paragraph(opening)
     doc.add_paragraph()
 
-    # ── Error list ────────────────────────────────────────────────────────────
-    errors = analysis_data.get("errors", [])
+    # Error list
     for idx, error in enumerate(errors, start=1):
         cpt_codes = ", ".join(str(li) for li in error.get("line_items_affected", []))
         impact = error.get("estimated_dollar_impact", 0.0)
@@ -96,35 +137,31 @@ def build_docx(analysis_data: dict, letter_content: str | None, output_path: str
         doc.add_paragraph(f"    Line item(s) affected: {cpt_codes}")
         doc.add_paragraph(f"    {description}")
 
-        # Citations
         citations = error.get("citations") or []
-        if citations:
-            for citation in citations:
-                source = citation.get("source", "")
-                section = citation.get("section", "")
-                doc.add_paragraph(f"    Source: {source}, {section}")
+        for citation in citations:
+            doc.add_paragraph(
+                f"    Source: {citation.get('source', '')}, "
+                f"{citation.get('section', '')}"
+            )
 
-        # RAG explanation (if available)
         explanation = error.get("explanation")
         if explanation:
             doc.add_paragraph(f"    {explanation}")
 
         doc.add_paragraph()
 
-    # ── Total ─────────────────────────────────────────────────────────────────
+    # Total
     p = doc.add_paragraph()
     p.add_run(f"Total Adjustment Requested: ${total_savings:,.2f}").bold = True
     doc.add_paragraph()
 
-    # ── Formal dispute paragraph ──────────────────────────────────────────────
+    # Dispute paragraph
     if letter_content:
         doc.add_paragraph(letter_content)
     else:
-        _add_default_dispute_paragraph(doc, provider_name, total_savings)
+        doc.add_paragraph(_default_dispute_text(provider_name, total_savings))
 
     doc.add_paragraph()
-
-    # ── Closing ───────────────────────────────────────────────────────────────
     doc.add_paragraph(
         "I request a written response within 30 days confirming the "
         "adjustments to be made. Please contact me at the address above "
@@ -137,23 +174,21 @@ def build_docx(analysis_data: dict, letter_content: str | None, output_path: str
     doc.add_paragraph("[Phone Number]")
     doc.add_paragraph("[Email Address]")
     doc.add_paragraph()
+
     p = doc.add_paragraph()
-    p.add_run(f"MediCheck Analysis Reference: {session_id}").font.color.rgb = RGBColor(
-        0x88, 0x88, 0x88
-    )
-    run = p.runs[0]
+    run = p.add_run(f"MediCheck Analysis Reference: {session_id}")
+    run.font.color.rgb = RGBColor(0x88, 0x88, 0x88)
     run.font.size = Pt(8)
 
-    doc.save(output_path)
+    doc.save(stream)
 
 
-def build_pdf(analysis_data: dict, letter_content: str | None, output_path: str):
-    """
-    Generate the same dispute letter as a PDF using ReportLab.
-    FR-21: both formats produced and available within the same request.
-    """
+def _build_pdf_to_stream(
+    analysis_data: dict, letter_content: str | None, stream: io.BytesIO
+):
+    """Build PDF into a BytesIO stream."""
     doc = SimpleDocTemplate(
-        output_path,
+        stream,
         pagesize=letter,
         rightMargin=1.25 * inch,
         leftMargin=1.25 * inch,
@@ -163,7 +198,6 @@ def build_pdf(analysis_data: dict, letter_content: str | None, output_path: str)
 
     styles = getSampleStyleSheet()
     normal = styles["Normal"]
-    bold_style = ParagraphStyle("Bold", parent=normal, fontName="Helvetica-Bold")
     small = ParagraphStyle("Small", parent=normal, fontSize=8, textColor=colors.grey)
 
     patient_name = analysis_data.get("patient_name") or "[Patient Name]"
@@ -176,7 +210,6 @@ def build_pdf(analysis_data: dict, letter_content: str | None, output_path: str)
 
     story = []
 
-    # Header
     story.append(Paragraph(f"<b>{patient_name}</b>", normal))
     story.append(Paragraph("[Address Line 1]", normal))
     story.append(Paragraph("[City, State ZIP]", normal))
@@ -195,21 +228,19 @@ def build_pdf(analysis_data: dict, letter_content: str | None, output_path: str)
         )
     )
     story.append(Spacer(1, 0.15 * inch))
-
     story.append(Paragraph("Dear Billing Department,", normal))
     story.append(Spacer(1, 0.1 * inch))
 
     story.append(
         Paragraph(
             f"I am writing to formally dispute charges on the above-referenced bill "
-            f"totalling <b>${total_savings:,.2f}</b>. After careful review of the itemised "
-            f"charges, I have identified the following billing errors:",
+            f"totalling <b>${total_savings:,.2f}</b>. After careful review of the "
+            f"itemised charges, I have identified the following billing errors:",
             normal,
         )
     )
     story.append(Spacer(1, 0.1 * inch))
 
-    # Error list
     for idx, error in enumerate(errors, start=1):
         impact = error.get("estimated_dollar_impact", 0.0)
         error_type = error.get("error_type", "Billing Error")
@@ -224,7 +255,8 @@ def build_pdf(analysis_data: dict, letter_content: str | None, output_path: str)
         for citation in citations:
             story.append(
                 Paragraph(
-                    f"Source: {citation.get('source', '')}, {citation.get('section', '')}",
+                    f"Source: {citation.get('source', '')}, "
+                    f"{citation.get('section', '')}",
                     normal,
                 )
             )
@@ -270,11 +302,6 @@ def build_pdf(analysis_data: dict, letter_content: str | None, output_path: str)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
-
-
-def _add_default_dispute_paragraph(doc, provider_name: str, total_savings: float):
-    text = _default_dispute_text(provider_name, total_savings)
-    doc.add_paragraph(text)
 
 
 def _default_dispute_text(provider_name: str, total_savings: float) -> str:
