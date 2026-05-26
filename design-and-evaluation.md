@@ -153,18 +153,18 @@ Service 2 is a stateful Flask REST API responsible for accepting uploaded medica
 
 **Architecture:**
 - Framework: Flask (Python), application factory pattern (`create_app`)
-- ORM: SQLAlchemy with Flask-SQLAlchemy extension
-- Database: SQLite (development), PostgreSQL (production on Render)
+- ORM: SQLAlchemy with Flask-SQLAlchemy extension, connecting to Supabase PostgreSQL
+- Database: Supabase PostgreSQL (`db.xxxx.supabase.co:5432`) — free tier, no expiry. SQLite used for local development and all tests.
 - OCR: AWS Textract (`AnalyzeDocument` API) with PDF-to-image conversion via PyMuPDF; mock OCR service available via `USE_MOCK_OCR` env var for testing
 - Error detection: Strategy pattern — four pluggable detector modules orchestrated by `ErrorDetectionEngine`
 - Letter generation: `python-docx` (DOCX) + `docx2pdf` (PDF); files persisted on disk and served via download endpoint
-- Deployment: Render (web service), PostgreSQL add-on
+- Deployment: Render (web service)
 
 **Configurable env vars:**
 
 | Variable | Purpose | Default |
 |---|---|---|
-| `DATABASE_URL` | SQLAlchemy database URI | `sqlite:///medicheck_dev.db` |
+| `DATABASE_URL` | Supabase PostgreSQL connection string | `sqlite:///medicheck_dev.db` (local dev only) |
 | `SERVICE3_URL` | Service 3 base URL for RAG calls | `http://localhost:5002` (warns in production) |
 | `SERVICE2_BASE_URL` | Self URL used for generating download links | `http://localhost:5001` (warns in production) |
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_REGION` | Textract credentials | — |
@@ -208,7 +208,7 @@ extracted → confirmed → analysed → letter_generated
 
 Each state transition is validated by `SessionStatus.can_transition_to(current, target)` before the route proceeds. If the transition is invalid (e.g., `/analyse` called before `/confirm`), the endpoint returns HTTP 400 `NOT_CONFIRMED`. This prevents out-of-order API calls and keeps session state consistent with persisted data (FR-26).
 
-Status is stored as a string column on the `Session` model and updated only on a successful database commit. If the commit fails, the status update is rolled back so the session remains in its prior valid state (anti-pattern L3).
+Status is stored as a string column on the `Session` model and updated only on a successful database commit to Supabase. If the commit fails, the status update is rolled back so the session remains in its prior valid state (anti-pattern L3).
 
 ---
 
@@ -257,7 +257,7 @@ Error detection follows the **Strategy Pattern**: each detector is a standalone 
 
 ### Database Models
 
-Five SQLAlchemy models persist the full analysis lifecycle:
+Five models persist the full analysis lifecycle in Supabase PostgreSQL:
 
 | Model | Purpose | Key fields |
 |---|---|---|
@@ -281,7 +281,7 @@ Service 2 calls Service 3 twice during the analysis workflow:
 2. **At analysis time (`POST /analyse`):** Calls `POST /explain` with the list of detected errors. Service 3 returns a grounded explanation and citations per `error_id`. These are merged into `AnalysisResult` rows before the response is returned.
 
 **Graceful degradation (NFR-02, NFR-18):**
-- All outbound Service 3 calls use an explicit timeout (configurable via `SERVICE3_TIMEOUT_SECONDS`, default 30 seconds)
+- All outbound Service 3 calls use an explicit timeout (configurable via `SERVICE3_TIMEOUT_SECONDS`, default 60 seconds)
 - `requests.Timeout` and `requests.ConnectionError` are caught; the partial response (explanations `null`, `rag_available: false`) is returned with HTTP 200 — not HTTP 503
 - This allows patients to access analysis results even when Service 3 is unavailable or cold-starting on Render
 - If `error_id` keys are missing from the Service 3 response, the gap is logged as a warning before the merge so the absence is visible in logs (anti-pattern M4)
@@ -295,13 +295,13 @@ Service 2 calls Service 3 twice during the analysis workflow:
 | `test_detectors.py` | Unit tests for all 4 detectors | 15+ tests covering normal cases, edge cases, missing data, and boundary thresholds (NFR-25) |
 | `test_engine.py` | `ErrorDetectionEngine` orchestration | Verifies all detectors execute; one failure doesn't stop others (FR-10); result defect detection (FR-16) |
 | `test_analyse.py` | `POST /analyse` route integration | 404, 400, 200 full response; partial response on Service 3 timeout; all-clear scenario |
-| `test_pipeline.py` | End-to-end: upload → confirm → analyse → letter → download | Mock OCR + mock Service 3; in-memory SQLite; synthetic PDF generation |
+| `test_pipeline.py` | End-to-end: upload → confirm → analyse → letter → download | Mock OCR + mock Service 3; in-memory SQLite (substituting Supabase); synthetic PDF generation |
 | `test_upload.py` | `POST /upload` route | Placeholder — not yet populated |
 
 **Testing approach:**
 - No live HTTP calls — Service 3 is always mocked via `pytest-mock`
 - No AWS Textract calls — `MockOCRService` or mocked client substituted in all tests
-- In-memory SQLite database for all integration tests
+- In-memory SQLite database substitutes Supabase PostgreSQL for all integration tests
 - All test data is synthetic — no real patient or billing data
 
 ---
