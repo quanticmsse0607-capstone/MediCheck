@@ -1,42 +1,125 @@
 # MediCheck — Design and Testing Document
 
----
-
 ## Architecture Decisions and Rationale
 
-*To be completed — see design-and-evaluation.md for Service 3 design decisions.*
+Decision 1 — Three-Service Microservices Split
+MediCheck is decomposed into three independently deployable services rather than a monolith.
+Drivers: The OCR/analysis pipeline (Service 2) and the RAG/LLM pipeline (Service 3) have fundamentally different scaling profiles, dependency trees, and failure modes. Separating them allows each to be scaled, deployed, and updated independently without risking a full-system outage.
+Decision: Service 1 (React frontend) communicates with Service 2 (Bill Analysis API) over REST. Service 2 calls Service 3 (RAG & Letter) internally. Service 3 is never called directly by the frontend.
+Trade-offs accepted: Added deployment complexity and inter-service latency. Mitigated by startup health checks, per-service timeouts (NFR-02, NFR-18), and graceful degradation — if Service 3 is unavailable, Service 2 returns results with rag_available: false rather than failing entirely.
+
+Decision 2 — React SPA with Vite (Service 1)
+Drivers: A multi-step user flow (upload → confirm fields → view report → download letter) maps naturally to a client-side routed SPA rather than server-rendered pages.
+Decision: React with Vite as the build tool. All API calls go through a thin medicheck.js client module with a centralised ApiError type, keeping error handling consistent across the UI.
+Trade-offs accepted: No server-side rendering; SEO is not a requirement for this application.
+
+Decision 3 — Flask REST API with Supabase PostgreSQL (Service 2)
+Drivers: A lightweight synchronous request/response model suits the analysis flow. Supabase provides a managed PostgreSQL database with a simple connection string, removing the need to operate database infrastructure. The session state machine (EXTRACTED → CONFIRMED → ANALYSED → LETTER_GEN) is enforced at the route layer — out-of-order requests return HTTP 400. All detector logic is isolated behind the ErrorDetectionEngine abstraction.
+Decision: Flask with SQLAlchemy as the ORM layer connecting to Supabase PostgreSQL (db.xxxx.supabase.co:5432). Supabase was selected over a self-managed PostgreSQL instance for its free tier with no expiry, built-in connection pooling, and zero-ops maintenance burden appropriate for prototype scale.
+Trade-offs accepted: Synchronous processing means long-running analyses block the worker. Acceptable at prototype scale; a task queue (e.g. Celery) would be the natural next step for production. Supabase free tier imposes connection limits that would need review before scaling.
+
+Decision 4 — OCR Strategy: PDFPlumber then AWS Textract
+Drivers: Extracting structured billing data from patient PDFs is the critical first step of the entire pipeline. The accuracy and reliability of this extraction directly determines the quality of downstream error detection.
+Initial approach — PDFPlumber: The first implementation used PDFPlumber, a Python library for extracting text and tables from PDF files. It required no external API calls, had no per-use cost, and worked well for programmatically generated PDFs with clean text layers.
+Problem encountered: Real-world hospital bills and EOBs are frequently scanned documents or image-based PDFs with no embedded text layer. PDFPlumber returned empty or near-empty extractions on these inputs, making the downstream field extraction unreliable. Confidence scores were low and the correction burden on the user at the Field Confirmation step was unacceptably high.
+Switch to AWS Textract: AWS Textract's AnalyzeDocument API uses machine learning to extract text and structured form data from both native-text and scanned PDFs. It correctly identified key-value pairs (e.g. "Total Billed: $2,400.00") and table structures (line items with CPT codes and amounts) from image-based documents where PDFPlumber had failed entirely.
+Trade-offs accepted: AWS Textract introduces a per-page API cost and an external dependency on AWS credentials. This makes it impossible to run live OCR in CI without real credentials. Mitigated by USE_MOCK_OCR=true, which substitutes MockOCRService for all test and CI runs, returning pre-defined extracted fields from synthetic test data. The services/ocr.py module is excluded from coverage reporting for this reason.
+
+Decision 5 — LangChain RAG Pipeline with ChromaDB (Service 3)
+Drivers: Explanations must be grounded in real regulatory sources (CMS Physician Fee Schedule, No Surprises Act Pub. L. 116-260, ICD-10-CM coding guidelines, Procedure-to-RVU crosswalk) rather than relying on LLM parametric memory alone, to reduce hallucination risk in a healthcare context (FR-17).
+Decision: LangChain orchestrates retrieval-augmented generation. ChromaDB is the vector store, persisted as a volume on Render so it survives restarts (NFR-13). Source PDFs are ingested via ingest.py and embedded using OpenAI embeddings. GPT-4o-mini generates explanations at temperature=0 for deterministic output.
+Trade-offs accepted: Cold start latency on Render free tier (up to 6 minutes). Mitigated by extended health-check retries in CI/CD (24 retries at 15s intervals) and a @app.before_request guard that re-initialises the chain if the Werkzeug reloader resets module globals (L5).
+
+Decision 6 — Graceful Degradation over Hard Dependency
+Drivers: Service 3 involves an external paid API (OpenAI) and a cold-start delay. Making it a hard dependency would cause the entire analysis flow to fail on any transient LLM issue.
+Decision: Service 2 treats Service 3 as an optional enrichment layer. A 10-second timeout is enforced per the NFR-18 inter-service timeout requirement. If Service 3 times out or is unreachable, analysis results are returned without explanations and rag_available is set to false. The user sees a partial report with a retry prompt rather than an error page.
+
+*see design-and-evaluation.md for Service 3 design decisions.*
 
 ---
 
 ## Domain-Driven Design Bounded Contexts
 
-*To be completed.*
+MediCheck is organised around two primary bounded contexts corresponding to Services 2 and 3, with Service 1 acting as the presentation layer. The bounded context diagram can be found at: Docs/diagrams/medicheck_bounded_context.png
 
----
+Context 1 — Bill Processing Context
+Service: Service 2 — Flask API · PostgreSQL (Supabase) · pdfplumber / Textract
+Responsibilities: Accepting patient bill and EOB documents, running OCR extraction, storing structured billing fields, allowing the user to correct extracted values before analysis, running the four error detectors, persisting results, and generating the dispute letter document.
+Key entities: Session, ExtractedField, LineItem, AnalysisResult, DisputeLetter
+Services: OCRService (pdfplumber / Textract), ErrorDetectionEngine (Strategy pattern, 4 detectors), RAGClient (HTTP · 10s timeout), LetterBuilder (python-docx · ReportLab)
+Session state machine (FR-26): EXTRACTED → CONFIRMED → ANALYSED → LETTER_GEN
+API endpoints: GET /health, POST /upload, POST /confirm, POST /analyse, POST /letter, GET /download/<id>/file
+Language: "upload", "session", "confirmed fields", "EOB", "line item", "detection", "error type", "confidence", "RAG available"
+Boundary: Detectors operate on in-memory confirmed_fields dicts — they never query the database directly. RAGClient is the only point of contact with the Knowledge & Explanation context, translating any failure into a safe fallback (rag_available: false) rather than propagating exceptions.
+
+Context 2 — Knowledge & Explanation Context
+Service: Service 3 — Flask · ChromaDB · LangChain · GPT-4o-mini
+Responsibilities: Retrieving relevant regulatory document chunks from ChromaDB, generating grounded plain-language explanations for detected errors, and drafting dispute letter content.
+Key entities: KnowledgeBase (ChromaDB vector store · CMS document chunks · embeddings), Explanation (error_id · text · citations[] · source_passages[]), LetterContent (body_text · regulatory_refs · dispute_paragraph), Citation (source · section · url · passage_excerpt), RAGChain (LangChain retrieval · GPT-4o-mini · temperature=0), LetterGenerator (GPT-4o-mini · knowledge-grounded · temperature=0)
+CMS knowledge base sources (FR-17): CMS Physician Fee Schedule (MPFS), No Surprises Act — Pub. L. 116-260, ICD-10-CM coding guidelines, Procedure-to-RVU crosswalk
+API endpoints: GET /health, POST /explain → explanations[] + citations[], POST /draft-letter → letter content (string)
+Language: "explain", "retrieval", "citations", "module", "draft letter", "completions"
+Boundary: This context has no knowledge of sessions, patients, or billing fields. It receives only error type, description, and module name — no PII crosses this boundary. This is a deliberate HIPAA risk-reduction decision (NFR-21, NFR-24).
+
+Infrastructure (shared)
+
+PostgreSQL — Supabase: sessions · extracted_fields · line_items · analysis_results · dispute_letters. Free tier · no expiry.
+GitHub Actions CI/CD: black · pylint · pytest · auto-deploy · health check. NFR-23, NFR-24.
+OpenAI API: GPT-4o-mini · temperature=0 · RAG-grounded. 429 → retry.
+Service 1 — React frontend: Vite · Tailwind · http://localhost:5173. Pages: Upload, Field Confirmation, Error Report, Dispute Letter.
 
 ## Microservices Architecture Diagram
+The deployment and communication diagram is maintained as a separate file and can be found at: Docs/diagrams/medicheck_deployment_diagram.png
 
-*To be completed.*
-
----
+The diagram shows three Render-hosted services communicating over HTTPS REST. Service 1 (React SPA, static site) sends requests via a Vite proxy to Service 2 (Bill Analysis API, web service). Service 2 calls Service 3 (RAG & Letter, web service) via POST /explain and POST /draft-letter with a 10-second timeout (NFR-18); on timeout, rag_available falls back to false. External dependencies shown: Supabase PostgreSQL (sessions, fields, results, letters), ChromaDB (persistent volume on Service 3, survives restarts per NFR-13), and OpenAI API (GPT-4o-mini, embeddings, 429 → retry).
 
 ## UML Structural Diagram (Class Diagram)
 
-*To be completed.*
+Two class diagrams are maintained as separate files:
+Strategy pattern (detector hierarchy only):Docs/diagrams/medicheck_uml_class_diagram.png
 
----
+Shows BaseDetector (abstract), DetectionResult (dataclass), ErrorDetectionEngine, and the four concrete detector subclasses: DuplicateChargeDetector, MedicareRateDetector, EOBReconciliationDetector, NoSurprisesActDetector. Relationships: inheritance (BaseDetector → detectors), dependency/uses (ErrorDetectionEngine → BaseDetector), and <returns> (BaseDetector → DetectionResult).
+
+Combined full diagram (all services): Docs/diagrams/medicheck_combined_uml.png
+Extends the above with Flask route blueprints (Service 2), Supabase/PostgreSQL models (Session, ExtractedField, LineItem, AnalysisResult, DisputeLetter), service classes (RAGClient, LetterBuilder), and RAGChain components (Service 3: RAGChain, KnowledgeBase, LetterGenerator).
 
 ## UML Behavioural Diagram (Sequence Diagram)
 
-*To be completed.*
+The sequence diagram is maintained as a separate file and can be found at: Docs/diagrams/medicheck_sequence_diagram.png
 
----
+The diagram traces the full four-phase flow across five participants: Service 1 (React UI), Service 2 (Bill Analysis), OCR (pdfplumber), PostgreSQL (Supabase), and Service 3 (RAG & Letter).
+
+Phase 1 — Upload & OCR extraction: POST /upload → extract(file_bytes) → extracted_fields() → INSERT session + extracted_fields → session_id (UUID) → 200 (session_id, extracted_fields).
+Phase 2 — Field confirmation: POST /confirm (session_id, confirmed_fields) → UPDATE corrected_amount, cpt_code → status = confirmed → 200 (status: confirmed).
+Phase 3 — Error detection & RAG explanation: POST /analyse (session_id) → SELECT confirmed_fields + line_items → run 4 detectors (duplicate · medicare · nsa · eob) → POST /explain (errors[]) — 10s timeout (NFR-18) → RAG retrieval + GPT-4o-mini → [explanations[], citations[]] → alt fragment: timeout after 3s → rag_available: false · explanation: null → INSERT analysis_results[] → status = analysed → 200 (errors[], total_errors, rag_available).
+Phase 4 — Dispute letter generation & download: POST /letter (session_id) → SELECT analysis_results[] → POST /draft-letter (session_id, analysis) → GPT-4o-mini letter generation → letter_content (string) → build .docx + .pdf (python-docx + ReportLab) → INSERT dispute_letters (docx_path, pdf_path) → 200 (downloads: {docx_url, pdf_url}) → GET /download/<id>/letter.docx → 200 letter.docx (binary — FR-13).
 
 ## Design Patterns Applied
 
-*To be completed.*
+1. Strategy Pattern — Billing Error Detectors
+Where: services/service2-billanalysis/detectors/
+Description: Each of the four billing error detectors (DuplicateChargeDetector, EOBReconciliationDetector, MedicareRateDetector, NoSurprisesActDetector) extends the abstract BaseDetector class and implements the run(confirmed_fields: dict) → list[DetectionResult] interface. ErrorDetectionEngine holds a list[BaseDetector] and calls run() on each without knowing the concrete type.
+Benefit: New detectors can be added without modifying the engine. One detector raising an exception does not stop the others (FR-10). Tests for each detector are fully isolated.
 
----
+2. Anti-Corruption Layer — RAGClient
+Where: services/service2-billanalysis/services/rag_client.py
+Description: RAGClient wraps all calls to Service 3, translating HTTP errors, timeouts, and connection failures into a safe return value (explanations: {}, letter: None) rather than propagating exceptions into the analysis route. timeout: 10s is enforced on every call (NFR-18).
+Benefit: The Bill Processing context is completely insulated from the availability and interface of the Knowledge & Explanation context. Changing the Service 3 API contract requires changes only in RAGClient.
+
+3. Template Method Pattern — Letter Builder
+Where: services/service2-billanalysis/services/letter_builder.py
+Description: LetterBuilder defines the overall structure of a dispute letter (header, patient details, itemised errors, closing, signature block) with each section implemented as a discrete method. The top-level build() method calls each section in order, producing both .docx (python-docx) and .pdf (ReportLab) outputs.
+Benefit: Individual sections can be overridden or extended (e.g. for a different letter format) without rewriting the full build logic.
+
+4. Factory / Registry Pattern — Module Routing in RAG Chain
+Where: services/service3-rag/rag/chain.py
+Description: A module-name-to-retrieval-filter mapping routes each detected error to the correct regulatory document subset in ChromaDB (e.g. "medicare_rate_outlier" → MPFS documents, "no_surprises_act" → Pub. L. 116-260 chunks). Unknown modules skip retrieval entirely rather than searching the full knowledge base (M3).
+Benefit: Retrieval is scoped to relevant regulatory sources, reducing noise in the LLM context window and preventing cross-module hallucination.
+
+5. Guard Clause Pattern — Route State Machine
+Where: services/service2-billanalysis/routes/analyse.py, confirm.py
+Description: Each route checks the session's current state at the top of the handler and returns HTTP 400 immediately if the request is out of order (e.g. calling /analyse before /confirm). No business logic executes until the guard passes. Enforces FR-26.
+Benefit: State machine enforcement is explicit and co-located with the route, rather than buried in model methods.
 
 ## Anti-Patterns Identified and Resolved
 

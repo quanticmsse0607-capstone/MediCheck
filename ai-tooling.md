@@ -10,8 +10,8 @@ Tools used to assist with writing, reviewing, and debugging code during developm
 
 | Tool | Provider | Used by | Purpose | Sprints |
 |------|----------|---------|---------|---------|
-| Claude Code (CLI) | Anthropic | Member 1 | Code generation, refactoring, test writing, documentation, code review | 1–6 |
-| *(to be completed)* | | Member 2 | | |
+| Claude Code (CLI) | Anthropic | Nadia| Code generation, refactoring, test writing, documentation, code review | 1–6 |
+| Claude Code (CLI) | Anthropic | Shifali | Code generation, refactoring, test writing, documentation, code review | 1–6 |
 
 **Notes on use:**
 - All AI-assisted code was reviewed, understood, and validated by the responsible team member before being committed.
@@ -33,4 +33,4 @@ AI APIs and models that form part of MediCheck's production functionality (Servi
 - `gpt-4o-mini` was chosen over `gpt-4o` for cost efficiency — at `temperature=0` for structured, grounded output the quality difference is negligible for this use case, and the cost difference is approximately 10×.
 - `text-embedding-3-small` was chosen over `text-embedding-ada-002` for better retrieval quality at lower cost.
 - `temperature=0` is set on all generation calls to ensure deterministic, citation-grounded responses rather than creative elaboration.
-- All LLM calls are subject to a configurable timeout (`SERVICE3_TIMEOUT_SECONDS`, default 30 seconds). If Service 3 does not respond in time, Service 2 returns a partial response with `rag_available: false` rather than failing (NFR-02).
+- All LLM calls are subject to a configurable timeout (`SERVICE3_TIMEOUT_SECONDS`, default 60 seconds). If Service 3 does not respond in time, Service 2 returns a partial response with `rag_available: false` rather than failing (NFR-02).

@@ -5,8 +5,7 @@
 **Sprint:** 1  
 **Team:** Shifali Srivastava & Nadia van der Merwe  
 **Programme:** Quantic MSSE Capstone  
-**Last Updated:** March 2026  
-**Note:** This document supersedes system-requirements.md. All functional and non-functional requirements, user stories, user journey, and traceability matrix are consolidated here.
+**Last Updated:** May 2026
 
 ---
 
@@ -22,7 +21,6 @@
    - [Functional Requirements](#functional-requirements)
    - [Non-Functional Requirements](#non-functional-requirements)
 5. [Requirements Traceability Matrix](#requirements-traceability-matrix)
-6. [Future / Stretch User Stories](#future--stretch-user-stories)
 
 ---
 
@@ -1390,6 +1388,8 @@ A test coverage report shall be generated as part of the Sprint 5 test run and t
 
 ---
 
+---
+
 ## 5. Requirements Traceability Matrix
 
 ## Validation Summary
@@ -1404,42 +1404,43 @@ A test coverage report shall be generated as part of the Sprint 5 test run and t
 
 ✅ **Full bidirectional coverage achieved.** Every requirement links to at least one user story. Every user story links to at least one requirement.
 
+**Sprint 2 Implementation Status:** FR: 18/27 Tested · 9/27 Implemented | NFR: 14/27 Tested · 13/27 Implemented
+
+**Status key:** Tested = automated tests passing · Implemented = code complete, manually verified
+
 ---
 
 ## Traceability Matrix — Functional Requirements
 
-Status values: 
-Planned — not yet started · In Progress — currently being implemented · Implemented — code complete, not yet tested · Tested — covered by automated tests and passing
-
 | Requirement ID | Description | Category | Linked User Story IDs | Status |
 |---|---|---|---|---|
-| FR-01 | PDF upload — max 10 MB and 20 pages; rejected before processing if exceeded | Document Upload | US-001 | Planned |
-| FR-02 | Automatic extraction of at minimum 4 field categories; no manual entry required | Document Upload | US-001, US-002 | Planned |
-| FR-03 | Two documents per session (bill + EOB); analysis blocked if zero documents present | Document Upload | US-001, US-010 | Planned |
-| FR-04 | UUID session identifier returned in every subsequent response body | Document Upload | US-006, US-013 | Planned |
-| FR-05 | HTTP 400 with error code and description on upload validation failure | Document Upload | US-001, US-013 | Planned |
-| FR-06 | All extracted fields displayed before analysis; user cannot bypass this step | Field Confirmation | US-002 | Planned |
-| FR-07 | Every field editable; edited values replace originals; originals retained for audit | Field Confirmation | US-002 | Planned |
-| FR-08 | Confirmed fields persisted; HTTP 400 if analysis requested before confirmation | Field Confirmation | US-002, US-013 | Planned |
-| FR-09 | HTTP 404 if confirmation references non-existent session | Field Confirmation | US-013, US-014 | Planned |
-| FR-10 | All four checks executed every time; each produces a result or explicit all-clear | Error Detection | US-003, US-007, US-008, US-010, US-011 | Planned |
-| FR-11 | Duplicate charge detection — each duplicate pair produces a separate result | Error Detection | US-008 | Planned |
-| FR-12 | Rate outlier — >300% of Medicare rate flagged; result includes amounts and percentage | Error Detection | US-007 | Planned |
-| FR-13 | EOB reconciliation — each field discrepancy produces a separate result | Error Detection | US-010 | Planned |
-| FR-14 | NSA violation — result identifies provider, network status, and applicable protection | Error Detection | US-011 | Planned |
-| FR-15 | Fifth check addable without modifying existing checks or pipeline logic | Error Detection | US-018 | Planned |
-| FR-16 | Every error result includes all six required fields; missing field = defect | Error Detection | US-004, US-007, US-008, US-009, US-014 | Planned |
-| FR-17 | All four CMS sources present and queryable before explanation service is ready | Knowledge Base | US-007, US-009, US-011 | Planned |
-| FR-18 | Each explanation includes at least one citation; zero citations = defect | Knowledge Base | US-004, US-009 | Planned |
-| FR-19 | Out-of-domain queries return error response; no exceptions | Knowledge Base | US-015 | Planned |
-| FR-20 | Explanation service restart has no effect on detection pipeline | Knowledge Base | US-015, US-016 | Planned |
-| FR-21 | Both Word (.docx) and PDF produced and available for download in single request | Dispute Letter | US-005, US-012 | Planned |
-| FR-22 | Letter contains all required elements (name, errors, citations, total, dispute paragraph); missing element = defect | Dispute Letter | US-005, US-009 | Planned |
-| FR-23 | Both formats retrievable without re-uploading, re-confirming, or re-analysing | Dispute Letter | US-005, US-012 | Planned |
-| FR-24 | No registration or credentials required; session initiated by upload only | Session Management | US-006 | Planned |
-| FR-25 | All session data retrievable by session ID for minimum 24 hours | Session Management | US-006, US-025 | Planned |
-| FR-26 | Session status transitions in defined order; out-of-sequence requests return HTTP 400 | Session Management | US-013, US-015 | Planned |
-| FR-27 | Session ID and recovery warning displayed before user proceeds from upload | Session Management | US-006 | Planned |
+| FR-01 | PDF upload — max 10 MB and 20 pages; rejected before processing if exceeded | Document Upload | US-001 | Tested |
+| FR-02 | Automatic extraction of at minimum 4 field categories; no manual entry required | Document Upload | US-001, US-002 | Tested |
+| FR-03 | Two documents per session (bill + EOB); analysis blocked if zero documents present | Document Upload | US-001, US-010 | Tested |
+| FR-04 | UUID session identifier returned in every subsequent response body | Document Upload | US-006, US-013 | Tested |
+| FR-05 | HTTP 400 with error code and description on upload validation failure | Document Upload | US-001, US-013 | Tested |
+| FR-06 | All extracted fields displayed before analysis; user cannot bypass this step | Field Confirmation | US-002 | Implemented |
+| FR-07 | Every field editable; edited values replace originals; originals retained for audit | Field Confirmation | US-002 | Tested |
+| FR-08 | Confirmed fields persisted; HTTP 400 if analysis requested before confirmation | Field Confirmation | US-002, US-013 | Tested |
+| FR-09 | HTTP 404 if confirmation references non-existent session | Field Confirmation | US-013, US-014 | Tested |
+| FR-10 | All four checks executed every time; each produces a result or explicit all-clear | Error Detection | US-003, US-007, US-008, US-010, US-011 | Tested |
+| FR-11 | Duplicate charge detection — each duplicate pair produces a separate result | Error Detection | US-008 | Tested |
+| FR-12 | Rate outlier — >300% of Medicare rate flagged; result includes amounts and percentage | Error Detection | US-007 | Tested |
+| FR-13 | EOB reconciliation — each field discrepancy produces a separate result | Error Detection | US-010 | Tested |
+| FR-14 | NSA violation — result identifies provider, network status, and applicable protection | Error Detection | US-011 | Tested |
+| FR-15 | Fifth check addable without modifying existing checks or pipeline logic (Strategy pattern) | Error Detection | US-018 | Tested |
+| FR-16 | Every error result includes all six required fields; missing field = defect | Error Detection | US-004, US-007, US-008, US-009, US-014 | Tested |
+| FR-17 | All four CMS sources present and queryable before explanation service is ready | Knowledge Base | US-007, US-009, US-011 | Implemented |
+| FR-18 | Each explanation includes at least one citation; zero citations = defect | Knowledge Base | US-004, US-009 | Implemented |
+| FR-19 | Out-of-domain queries return error response; no exceptions | Knowledge Base | US-015 | Implemented |
+| FR-20 | Explanation service restart has no effect on detection pipeline | Knowledge Base | US-015, US-016 | Implemented |
+| FR-21 | Both Word (.docx) and PDF produced and available for download in single request | Dispute Letter | US-005, US-012 | Tested |
+| FR-22 | Letter contains all required elements (name, errors, citations, total, dispute paragraph); missing element = defect | Dispute Letter | US-005, US-009 | Implemented |
+| FR-23 | Both formats retrievable without re-uploading, re-confirming, or re-analysing | Dispute Letter | US-005, US-012 | Implemented |
+| FR-24 | No registration or credentials required; session initiated by upload only | Session Management | US-006 | Tested |
+| FR-25 | All session data retrievable by session ID for minimum 24 hours | Session Management | US-006, US-025 | Implemented |
+| FR-26 | Session status transitions in defined order; out-of-sequence requests return HTTP 400 | Session Management | US-013, US-015 | Tested |
+| FR-27 | Session ID and recovery warning displayed before user proceeds from upload | Session Management | US-006 | Implemented |
 
 ---
 
@@ -1447,33 +1448,33 @@ Planned — not yet started · In Progress — currently being implemented · Im
 
 | Requirement ID | Description | Category | Linked User Story IDs | Status |
 |---|---|---|---|---|
-| NFR-01 | Full analysis response within 30 seconds; up to 20 pages; up to 10 concurrent users | Performance | US-003 | Planned |
-| NFR-02 | Partial response within 2 seconds of 10-second explanation timeout; rag_available flag returned | Performance | US-003, US-015 | Planned |
-| NFR-03 | Session identifier returned within 60 seconds of upload request | Performance | US-001, US-006 | Planned |
-| NFR-04 | Health check response within 2 seconds; exceeding limit = pipeline failure | Performance | US-016 | Planned |
-| NFR-05 | Explanation latency p50 <10s, p95 <20s; validated over minimum 15 queries | Performance | US-003, US-009 | Planned |
-| NFR-06 | Synthetic data only; every test document includes visible disclaimer | Security | US-006 | Planned |
-| NFR-07 | Zero secrets in repository; reference config file in repo root | Security | US-006, US-017 | Planned |
-| NFR-08 | All communication over HTTPS; plain HTTP rejected or redirected | Security | US-006 | Planned |
-| NFR-09 | All service-to-service addresses read from environment config; hardcoded addresses block PR | Security | US-017, US-018 | Planned |
-| NFR-10 | No copyrighted CPT descriptions in any stored data, response, or document | Security | US-007, US-008 | Planned |
-| NFR-11 | Each capability independently deployable; own URL and environment config | Deployment | US-015, US-016, US-018 | Planned |
-| NFR-12 | GET /health returns HTTP 200 with status and service name before other endpoints ready | Deployment | US-016 | Planned |
-| NFR-13 | Knowledge base survives restarts; explanation service ready without re-ingestion | Deployment | US-015, US-016 | Planned |
-| NFR-14 | Prototype cost $0/month; free-tier vs production cost analysis documented | Deployment | US-017 | Planned |
-| NFR-15 | All inter-service payloads JSON; schema defined in one place; deviation = defect | API Contract | US-013, US-014 | Planned |
-| NFR-16 | All error responses include error code, message, and session ID; no exceptions | API Contract | US-013, US-014, US-015 | Planned |
-| NFR-17 | HTTP 400 before confirmation; HTTP 404 for missing results; both integration-tested | API Contract | US-013, US-015 | Planned |
-| NFR-18 | All explanation service calls have explicit 10-second timeout; missing timeout blocks PR | API Contract | US-015, US-018 | Planned |
-| NFR-19 | Consistent design across all four pages; inconsistencies treated as defects | UI & Accessibility | US-002, US-004 | Planned |
-| NFR-20 | Three severity levels with correct colour and text label; verified in test scenario output | UI & Accessibility | US-004, US-007 | Planned |
-| NFR-21 | All fields labelled; required fields block progression until non-empty | UI & Accessibility | US-002 | Planned |
-| NFR-22 | Responsive across mobile, tablet, desktop; verified against all three in Sprint 5 review | UI & Accessibility | US-001, US-002, US-004, US-005 | Planned |
-| NFR-23 | Pipeline runs on every PR and push to main; failing step blocks merge without exception | Testing/CI/CD | US-018 | Planned |
-| NFR-24 | Auto-deploy on passing main; health checks within 5 seconds post-deploy; failure logged | Testing/CI/CD | US-016, US-018 | Planned |
-| NFR-25 | Minimum 15 unit tests; 3 per check (positive, negative, boundary); plus integration and smoke tests | Testing/CI/CD | US-008, US-010, US-011, US-012 | Planned |
-| NFR-26 | All inter-service integration tests use simulated responses; live calls rejected in review | Testing/CI/CD | US-015, US-018 | Planned |
-| NFR-27 | Coverage report committed; minimum 80% per detection check; below 80% = Sprint 5 failure | Testing/CI/CD | US-007, US-008, US-010, US-011 | Planned |
+| NFR-01 | Full analysis response within 30 seconds; up to 20 pages; up to 10 concurrent users | Performance | US-003 | Implemented |
+| NFR-02 | Partial response within 2 seconds of 10-second explanation timeout; rag_available flag returned | Performance | US-003, US-015 | Tested |
+| NFR-03 | Session identifier returned within 60 seconds of upload request | Performance | US-001, US-006 | Implemented |
+| NFR-04 | Health check response within 2 seconds; exceeding limit = pipeline failure | Performance | US-016 | Tested |
+| NFR-05 | Explanation latency p50 <10s, p95 <20s; validated over minimum 15 queries | Performance | US-003, US-009 | Implemented |
+| NFR-06 | Synthetic data only; every test document includes visible disclaimer | Security | US-006 | Tested |
+| NFR-07 | Zero secrets in repository; reference config file in repo root | Security | US-006, US-017 | Implemented |
+| NFR-08 | All communication over HTTPS; plain HTTP rejected or redirected | Security | US-006 | Implemented |
+| NFR-09 | All service-to-service addresses read from environment config; hardcoded addresses block PR | Security | US-017, US-018 | Implemented |
+| NFR-10 | No copyrighted CPT descriptions in any stored data, response, or document | Security | US-007, US-008 | Tested |
+| NFR-11 | Each capability independently deployable; own URL and environment config | Deployment | US-015, US-016, US-018 | Implemented |
+| NFR-12 | GET /health returns HTTP 200 with status and service name before other endpoints ready | Deployment | US-016 | Tested |
+| NFR-13 | Knowledge base survives restarts; explanation service ready without re-ingestion | Deployment | US-015, US-016 | Implemented |
+| NFR-14 | Prototype cost $0/month; free-tier vs production cost analysis documented | Deployment | US-017 | Implemented |
+| NFR-15 | All inter-service payloads JSON; schema defined in one place; deviation = defect | API Contract | US-013, US-014 | Tested |
+| NFR-16 | All error responses include error code, message, and session ID; no exceptions | API Contract | US-013, US-014, US-015 | Tested |
+| NFR-17 | HTTP 400 before confirmation; HTTP 404 for missing results; both integration-tested | API Contract | US-013, US-015 | Tested |
+| NFR-18 | All explanation service calls have explicit 10-second timeout; missing timeout blocks PR | API Contract | US-015, US-018 | Tested |
+| NFR-19 | Consistent design across all four pages; inconsistencies treated as defects | UI & Accessibility | US-002, US-004 | Implemented |
+| NFR-20 | Three severity levels with correct colour and text label; verified in test scenario output | UI & Accessibility | US-004, US-007 | Implemented |
+| NFR-21 | All fields labelled; required fields block progression until non-empty | UI & Accessibility | US-002 | Implemented |
+| NFR-22 | Responsive across mobile, tablet, desktop; verified against all three in Sprint 5 review | UI & Accessibility | US-001, US-002, US-004, US-005 | Implemented |
+| NFR-23 | Pipeline runs on every PR and push to main; failing step blocks merge without exception | Testing/CI/CD | US-018 | Tested |
+| NFR-24 | Auto-deploy on passing main; health checks within 5 seconds post-deploy; failure logged | Testing/CI/CD | US-016, US-018 | Tested |
+| NFR-25 | Minimum 15 unit tests; 3 per check (positive, negative, boundary); plus integration and smoke tests | Testing/CI/CD | US-008, US-010, US-011, US-012 | Tested |
+| NFR-26 | All inter-service integration tests use simulated responses; live calls rejected in review | Testing/CI/CD | US-015, US-018 | Tested |
+| NFR-27 | Coverage report committed; minimum 80% per detection check; below 80% = Sprint 5 failure | Testing/CI/CD | US-007, US-008, US-010, US-011 | Tested |
 
 ---
 
@@ -1526,33 +1527,24 @@ These requirements are covered by only one user story. If that story is descoped
 | NFR-21 | All fields labelled; required fields block progression | US-002 only |
 | NFR-23 | Pipeline runs on every PR and push to main | US-018 only |
 
----
-
-## 6. Future / Stretch User Stories
-
-These stories were identified during Sprint 1 but are explicitly out of scope for the MVP. They are documented here as a backlog reference and will be noted in the design and testing document's future work section. They should be added to the Trello backlog with a "Future Work" label — not assigned to any sprint.
-
----
-
-**US-FW-01**  
-*As a patient, I want to upload multiple provider bills at once (e.g. hospital bill, surgeon bill, and anaesthesiologist bill from the same procedure) so that MediCheck can detect duplicate charges that span across separate billing entities.*
-
-**Why deferred:** The MVP upload flow is scoped to one provider bill and one EOB per session. Supporting multiple bills would require changes to the field confirmation UI (associating line items with their source bill), an expanded data schema (multiple documents per session), and a new cross-bill detection module. The four core detection modules already provide strong coverage against the most common billing errors within a single bill and EOB pair.
-
-**Design note:** The extensible detection pipeline (FR-15) supports adding a cross-bill duplicate detection check without modifying existing checks. If implemented, it would compare procedure codes and service dates across all confirmed bills in a session, flagging same-code same-date charges from different providers for manual review rather than auto-flagging as errors, since split billing by multiple providers is sometimes legitimate.
+### Stories covering the most requirements (highest complexity)
+| User Story | Req Count | Risk Level |
+|---|---|---|
+| US-015 — Handle Service 3 timeouts (Jordan) | 10 | High |
+| US-013 — External app endpoints (Jordan) | 8 | High |
+| US-006 — Data privacy (Sarah) | 8 | High |
+| US-002 — Review extracted fields (Sarah) | 7 | Medium-High |
+| US-007 — Medicare rate comparison (Marcus) | 7 | Medium-High |
+| US-018 — CI/CD pipeline stability (Jordan) | 7 | Medium-High |
 
 ---
 
-**US-FW-02**  
-*As a returning patient, I want to create an account using my email address so that I can log back in and access my previous analysis results and dispute letters without needing to retain my session identifier.*
+## Status Key
 
-**Why deferred:** The MVP uses an anonymous session model — users are identified solely by their session ID, with no registration or authentication required (FR-24). Adding account management (email verification, password handling, login flows, forgotten credentials) is significant scope that does not contribute to any capstone rubric criterion and would consume Sprint 2 time reserved for OCR and infrastructure. The anonymous model also has a privacy benefit: no persistent link exists between a user's identity and their uploaded medical documents.
-
-**Design note:** If implemented, account-based sessions would require an authentication layer in the bill analysis service, a user identity entity in the data store, and session ownership validation on all endpoints.
-
----
-
-*Total future stories: 2*
-
-
-
+| Status | Meaning |
+|---|---|
+| Tested | Requirement defined; corresponding user story written; implementation not started |
+| Tested | Story is in the Current Sprint Backlog or In Progress column on Trello |
+| Tested | Code merged to main; functionality confirmed working |
+| Tested | Automated test written and passing for this requirement |
+| Done | Implemented + tested + reviewed |

@@ -4,9 +4,9 @@ All three services are deployed on Render's free tier from this repository.
 
 | Service | Description | URL |
 |---------|-------------|-----|
-| Service 1 — Frontend | React + Vite SPA | *(to be added in Sprint 2)* |
-| Service 2 — Bill Analysis API | Flask REST API | *(to be added in Sprint 2)* |
-| Service 3 — RAG & Letter Service | Flask RAG microservice | *(to be added in Sprint 2)* |
+| Service 1 — Frontend | React + Vite SPA | https://medicheck-frontend-i3rv.onrender.com |
+| Service 2 — Bill Analysis API | Flask REST API | https://medicheck-bill-analysis.onrender.com |
+| Service 3 — RAG & Letter Service | Flask RAG microservice | https://medicheck-rag.onrender.com |
 
 ## Health Check Endpoints
 
