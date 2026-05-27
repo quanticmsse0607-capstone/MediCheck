@@ -43,10 +43,10 @@ Decision: Service 2 treats Service 3 as an optional enrichment layer. A 10-secon
 MediCheck is organised around two primary bounded contexts corresponding to Services 2 and 3, with Service 1 acting as the presentation layer. The bounded context diagram can be found at: Docs/diagrams/medicheck_bounded_context.png
 
 Context 1 — Bill Processing Context
-Service: Service 2 — Flask API · PostgreSQL (Supabase) · pdfplumber / Textract
+Service: Service 2 — Flask API · PostgreSQL (Supabase) · Textract
 Responsibilities: Accepting patient bill and EOB documents, running OCR extraction, storing structured billing fields, allowing the user to correct extracted values before analysis, running the four error detectors, persisting results, and generating the dispute letter document.
 Key entities: Session, ExtractedField, LineItem, AnalysisResult, DisputeLetter
-Services: OCRService (pdfplumber / Textract), ErrorDetectionEngine (Strategy pattern, 4 detectors), RAGClient (HTTP · 10s timeout), LetterBuilder (python-docx · ReportLab)
+Services: OCRService (Textract), ErrorDetectionEngine (Strategy pattern, 4 detectors), RAGClient (HTTP · 30s timeout), LetterBuilder (python-docx · ReportLab)
 Session state machine (FR-26): EXTRACTED → CONFIRMED → ANALYSED → LETTER_GEN
 API endpoints: GET /health, POST /upload, POST /confirm, POST /analyse, POST /letter, GET /download/<id>/file
 Language: "upload", "session", "confirmed fields", "EOB", "line item", "detection", "error type", "confidence", "RAG available"
@@ -87,7 +87,7 @@ Extends the above with Flask route blueprints (Service 2), Supabase/PostgreSQL m
 
 The sequence diagram is maintained as a separate file and can be found at: Docs/diagrams/medicheck_sequence_diagram.png
 
-The diagram traces the full four-phase flow across five participants: Service 1 (React UI), Service 2 (Bill Analysis), OCR (pdfplumber), PostgreSQL (Supabase), and Service 3 (RAG & Letter).
+The diagram traces the full four-phase flow across five participants: Service 1 (React UI), Service 2 (Bill Analysis), OCR (Textract), PostgreSQL (Supabase), and Service 3 (RAG & Letter).
 
 Phase 1 — Upload & OCR extraction: POST /upload → extract(file_bytes) → extracted_fields() → INSERT session + extracted_fields → session_id (UUID) → 200 (session_id, extracted_fields).
 Phase 2 — Field confirmation: POST /confirm (session_id, confirmed_fields) → UPDATE corrected_amount, cpt_code → status = confirmed → 200 (status: confirmed).

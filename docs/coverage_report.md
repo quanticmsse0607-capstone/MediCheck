@@ -71,7 +71,7 @@ Uncovered lines (147–177, 193–220) are the Word and PDF file generation code
 The RAG client makes HTTP calls to Service 3. All integration tests mock Service 3 per NFR-26 (no live HTTP calls in tests). The 29% coverage reflects the mock paths being exercised; live call paths are tested in end-to-end testing. This is intentional and correct per NFR-26.
 
 **`services/ocr.py` — 10%**  
-The pdfplumber OCR service requires actual PDF files and the pdfplumber library for meaningful testing. Tests use `mock_ocr.py` instead per NFR-06 (synthetic data only). OCR extraction is validated through manual end-to-end testing with real PDFs. AWS Textract integration tested separately.
+The Textract OCR service requires live AWS credentials and actual PDF files for meaningful testing. Tests use `mock_ocr.py` instead per NFR-06 (synthetic data only). OCR extraction is validated through manual end-to-end testing with real PDFs.
 
 **`services/mock_ocr.py` — 0%**  
 Mock OCR is only used when `USE_MOCK_OCR=true`. In the test suite, OCR is patched at the route level rather than using the mock service directly. This is correct — the mock exists for local development, not for testing.
