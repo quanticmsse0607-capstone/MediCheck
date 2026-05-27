@@ -2,7 +2,7 @@
 
 **Project:** MediCheck — AI-Powered Healthcare Bill Accuracy & Dispute Assistant  
 **Version:** 2.0  
-**Sprint:** 1  
+**Sprint:** 6  
 **Team:** Shifali Srivastava & Nadia van der Merwe  
 **Programme:** Quantic MSSE Capstone  
 **Last Updated:** May 2026
@@ -222,7 +222,7 @@ Sarah is a 34-year-old office manager in Charleston, SC with no medical billing 
 
 - [ ] Analysis results are returned to the UI within 30 seconds for bills up to 20 pages
 - [ ] A progress indicator shows which detection module is currently running (duplicate check, rate comparison, etc.)
-- [ ] If Service 3 (RAG) times out, the error report still loads with core error data and a "Retry explanations" option
+- [ ] If Service 3 (RAG) times out, the error report still loads with core error data and an informational banner indicating explanations are unavailable
 - [ ] If no errors are detected, a positive confirmation message is shown with a summary of what was checked
 
 ---
@@ -494,10 +494,9 @@ Jordan is a full-stack developer on the Atrium Health patient portal team in Cha
 
 **Acceptance Criteria**
 
-- [ ] If Service 3 does not respond within 10 seconds, Service 2 returns the detection results with `explanation: null` and `citations: []` rather than a 503 error
+- [ ] If Service 3 does not respond within 30 seconds, Service 2 returns the detection results with `explanation: null` and `citations: []` rather than a 503 error
 - [ ] The response body includes a top-level `rag_available: false` flag so the portal can conditionally hide the explanation UI
 - [ ] Service 2 logs the timeout internally but does not expose internal error details in the response body
-- [ ] A retry endpoint (POST /explain/{session_id}) allows the portal to fetch explanations later when Service 3 recovers
 - [ ] Integration test covers the timeout scenario using a mocked Service 3 that returns no response
 
 ---
@@ -643,8 +642,8 @@ flowchart TD
     H[Service 2 → Service 3: POST /explain\nRAG retrieves knowledge base passages\nGPT-4o-mini generates explanations] --> H1
 
     H1{Service 3\nresponds in time?}
-    H1 -- Yes\n<10 seconds --> I
-    H1 -- Timeout --> H2[Error report loads\nwithout RAG explanations\nRetry button shown]
+    H1 -- Yes --> I
+    H1 -- Timeout --> H2[Error report loads\nwithout RAG explanations\nInformational banner shown]
     H2 --> I
 
     I[Error Report Page\n2 errors found — $747 savings\nColour-coded error cards] --> I1
@@ -847,7 +846,7 @@ Confidence scores provide transparency. Easy inline editing. Most fields correct
 
 | Scenario | System response |
 |---|---|
-| Service 3 timeout (>10 seconds) | Errors returned without explanations; `rag_available: false` flag set; "Retry explanations" button shown |
+| Service 3 timeout (>30 seconds) | Errors returned without explanations; `rag_available: false` flag set; informational banner shown |
 | No errors detected | "Great news! We didn't detect any obvious billing errors in your bill." |
 | LLM rate limit | Generic fallback text shown; raw detection output preserved |
 
@@ -1026,11 +1025,11 @@ Letter is professional and specific. Sarah wants to add her phone number (not on
 
 **Failure point:** Step 7
 
-**Cause:** Service 3 cold start or LLM rate limit. Does not respond within 10 seconds.
+**Cause:** Service 3 cold start or LLM rate limit. Does not respond within 30 seconds.
 
-**System response:** Service 2 returns detection results with `rag_available: false`. Error cards show: "Explanation temporarily unavailable — [Retry]." Core error data (type, line items, dollar impact) always shown.
+**System response:** Service 2 returns detection results with `rag_available: false`. Error cards show "Explanation temporarily unavailable." Core error data (type, line items, dollar impact) always shown.
 
-**Recovery:** Sarah clicks "Retry explanations." Service 3 now warm. Explanations load.
+**Recovery:** The user can still generate a dispute letter. Explanations are not retried once the session is analysed.
 
 **Frequency:** ~10% of requests during high-traffic periods
 
@@ -1289,7 +1288,7 @@ At the point of session creation, the system shall display the session identifie
 The system shall return a complete analysis response — including all four detection check results and all knowledge-grounded explanations — within 30 seconds of receiving a valid analysis request for a document of up to 20 pages, measured under normal operating conditions with no more than 10 concurrent users.
 
 **NFR-02**  
-If the explanation service does not return a response within 10 seconds of being called, the bill analysis service shall abandon the explanation request and return a partial response to the caller containing the detection results and a flag set to false indicating that explanations are unavailable. The caller shall receive this partial response within 2 seconds of the 10-second timeout elapsing.
+If the explanation service does not return a response within 30 seconds of being called, the bill analysis service shall abandon the explanation request and return a partial response to the caller containing the detection results and a flag set to false indicating that explanations are unavailable. The caller shall receive this partial response within 2 seconds of the 30-second timeout elapsing.
 
 **NFR-03**  
 The system shall return a session identifier to the caller within 60 seconds of receiving a document upload request for a document of up to 20 pages, under normal operating conditions.
@@ -1349,7 +1348,7 @@ All API endpoints shall return error responses in a consistent structure contain
 The system shall return HTTP 400 for any analysis request submitted before field confirmation is complete for that session. The system shall return HTTP 404 for any letter generation request submitted for a session that has no completed analysis results. Both conditions shall be tested as part of the integration test suite.
 
 **NFR-18**  
-Every outbound HTTP call from the bill analysis service to the explanation service shall specify an explicit timeout of 10 seconds. The absence of an explicit timeout on any such call shall constitute a code review failure and shall block the associated pull request from merging.
+Every outbound HTTP call from the bill analysis service to the explanation service shall specify an explicit timeout of 30 seconds. The absence of an explicit timeout on any such call shall constitute a code review failure and shall block the associated pull request from merging.
 
 ---
 
@@ -1438,7 +1437,7 @@ A test coverage report shall be generated as part of the Sprint 5 test run and t
 | FR-22 | Letter contains all required elements (name, errors, citations, total, dispute paragraph); missing element = defect | Dispute Letter | US-005, US-009 | Implemented |
 | FR-23 | Both formats retrievable without re-uploading, re-confirming, or re-analysing | Dispute Letter | US-005, US-012 | Implemented |
 | FR-24 | No registration or credentials required; session initiated by upload only | Session Management | US-006 | Tested |
-| FR-25 | All session data retrievable by session ID for minimum 24 hours | Session Management | US-006, US-025 | Implemented |
+| FR-25 | All session data retrievable by session ID for minimum 24 hours | Session Management | US-006 | Implemented |
 | FR-26 | Session status transitions in defined order; out-of-sequence requests return HTTP 400 | Session Management | US-013, US-015 | Tested |
 | FR-27 | Session ID and recovery warning displayed before user proceeds from upload | Session Management | US-006 | Implemented |
 
@@ -1449,7 +1448,7 @@ A test coverage report shall be generated as part of the Sprint 5 test run and t
 | Requirement ID | Description | Category | Linked User Story IDs | Status |
 |---|---|---|---|---|
 | NFR-01 | Full analysis response within 30 seconds; up to 20 pages; up to 10 concurrent users | Performance | US-003 | Implemented |
-| NFR-02 | Partial response within 2 seconds of 10-second explanation timeout; rag_available flag returned | Performance | US-003, US-015 | Tested |
+| NFR-02 | Partial response within 2 seconds of 30-second explanation timeout; rag_available flag returned | Performance | US-003, US-015 | Tested |
 | NFR-03 | Session identifier returned within 60 seconds of upload request | Performance | US-001, US-006 | Implemented |
 | NFR-04 | Health check response within 2 seconds; exceeding limit = pipeline failure | Performance | US-016 | Tested |
 | NFR-05 | Explanation latency p50 <10s, p95 <20s; validated over minimum 15 queries | Performance | US-003, US-009 | Implemented |
@@ -1465,7 +1464,7 @@ A test coverage report shall be generated as part of the Sprint 5 test run and t
 | NFR-15 | All inter-service payloads JSON; schema defined in one place; deviation = defect | API Contract | US-013, US-014 | Tested |
 | NFR-16 | All error responses include error code, message, and session ID; no exceptions | API Contract | US-013, US-014, US-015 | Tested |
 | NFR-17 | HTTP 400 before confirmation; HTTP 404 for missing results; both integration-tested | API Contract | US-013, US-015 | Tested |
-| NFR-18 | All explanation service calls have explicit 10-second timeout; missing timeout blocks PR | API Contract | US-015, US-018 | Tested |
+| NFR-18 | All explanation service calls have explicit 30-second timeout; missing timeout blocks PR | API Contract | US-015, US-018 | Tested |
 | NFR-19 | Consistent design across all four pages; inconsistencies treated as defects | UI & Accessibility | US-002, US-004 | Implemented |
 | NFR-20 | Three severity levels with correct colour and text label; verified in test scenario output | UI & Accessibility | US-004, US-007 | Implemented |
 | NFR-21 | All fields labelled; required fields block progression until non-empty | UI & Accessibility | US-002 | Implemented |
@@ -1543,8 +1542,8 @@ These requirements are covered by only one user story. If that story is descoped
 
 | Status | Meaning |
 |---|---|
-| Tested | Requirement defined; corresponding user story written; implementation not started |
-| Tested | Story is in the Current Sprint Backlog or In Progress column on Trello |
-| Tested | Code merged to main; functionality confirmed working |
+| Planned | Requirement defined; corresponding user story written; implementation not started |
+| In Progress | Story is in the Current Sprint Backlog or In Progress column on Trello |
+| Implemented | Code merged to main; functionality confirmed working |
 | Tested | Automated test written and passing for this requirement |
 | Done | Implemented + tested + reviewed |

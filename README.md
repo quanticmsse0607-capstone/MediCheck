@@ -42,7 +42,6 @@ This table is the single source of truth for all project documentation. Update t
 |---|---|---|---|
 | `requirements.md` | Personas, user stories, system requirements (FR/NFR), traceability matrix, future work | Both | Sprint 1 |
 | `docs/api-contract.md` | Inter-service JSON contract — Service 1 → Service 2 and Service 2 → Service 3 endpoints, request/response schemas, decisions log | Both | Sprint 5 |
-| `SERVICE2_EXPLAINED.md` | Service 2 architecture explanation and endpoint reference | Member 2 | Sprint 2 |
 | `deployed.md` | Live Render service URLs and health check endpoints | Member 2 | Each sprint |
 | `ai-tooling.md` | AI tools used during development | Both | Each sprint |
 | `design-and-testing.md` | Architecture decisions, UML diagrams, design patterns, anti-patterns, deployment cost analysis, test results | Both | Sprint 5 |
@@ -92,7 +91,6 @@ medicheck/
 ├── README.md                           # This file
 ├── deployed.md                         # Live Render service URLs
 ├── requirements.md                     # User stories, system requirements, traceability matrix
-├── SERVICE2_EXPLAINED.md               # Service 2 architecture explanation
 ├── design-and-testing.md               # Architecture, UML, patterns, test results (Sprint 5)
 ├── design-and-evaluation.md            # RAG evaluation results and proposal deviations (Sprint 5)
 ├── ai-tooling.md                       # AI tools used during development
@@ -327,7 +325,7 @@ GitHub Actions pipeline runs on every pull request and every push to `main`.
 
 **On push to `main` only:**
 - Integration tests: starts both Flask services locally, runs cross-service HTTP tests (real OpenAI calls)
-- Auto-deploys all three Render services via Render deploy hooks
+- Auto-deploys Service 2 and Service 3 via Render deploy hooks
 - Post-deploy health checks: `/health` on Service 2 and Service 3, root URL on Service 1 — fails the pipeline if any returns non-200
 
 Pipeline configuration: [.github/workflows/ci-cd.yml](.github/workflows/ci-cd.yml)
