@@ -19,7 +19,7 @@ class MockOCRService:
     def __init__(self):
         pass
 
-    def extract(self, file_bytes: bytes, source: str = "bill") -> dict:
+    def extract(self, file_bytes: bytes, source: str = "bill", filename: str = "") -> dict:
         """
         Return mock extracted data.
 
