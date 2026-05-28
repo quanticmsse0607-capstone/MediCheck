@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=1280">
+  <title>MediCheck — RAG Stack</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #f8fafc;
+      color: #1e293b;
+      font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+      width: 1280px;
+      height: 720px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      padding: 32px 48px 28px;
+      gap: 22px;
+    }
+
+    /* ── Title ── */
+    h1 {
+      font-size: 44px;
+      font-weight: 700;
+      text-align: center;
+      color: #0f172a;
+      letter-spacing: 0.3px;
+      flex-shrink: 0;
+    }
+    h1 span { color: #2563eb; }
+
+    /* ── Flow row ── */
+    .flow {
+      display: flex;
+      align-items: stretch;
+      justify-content: center;
+      gap: 0;
+      flex-shrink: 0;
+    }
+
+    /* LangChain orchestration wrapper */
+    .lc-wrapper {
+      display: flex;
+      align-items: stretch;
+      position: relative;
+      border: 2px dashed #65a30d;
+      border-radius: 16px;
+      padding: 8px 8px 28px;
+    }
+
+    .lc-label {
+      position: absolute;
+      bottom: -1px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #f8fafc;
+      padding: 0 12px;
+      font-size: 15px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1.6px;
+      color: #65a30d;
+      white-space: nowrap;
+    }
+
+    .box {
+      border-radius: 12px;
+      padding: 16px 18px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      min-width: 172px;
+    }
+
+    .chip {
+      display: inline-block;
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1.6px;
+      border-radius: 99px;
+      padding: 3px 10px;
+      margin-bottom: 10px;
+      align-self: center;
+    }
+
+    .box-title {
+      font-size: 27px;
+      font-weight: 700;
+      line-height: 1.2;
+      margin-bottom: 6px;
+    }
+
+    .box-sub {
+      font-size: 17px;
+      line-height: 1.5;
+    }
+
+    /* Colour variants */
+    .input-box  { background: #eff6ff; border: 2px solid #3b82f6; }
+    .input-box  .chip { background: #dbeafe; color: #1d4ed8; }
+    .input-box  .box-title { color: #1d4ed8; }
+    .input-box  .box-sub  { color: #3b82f6; }
+
+    .step-box   { background: #f5f3ff; border: 2px solid #7c3aed; }
+    .step-box   .chip { background: #ede9fe; color: #5b21b6; }
+    .step-box   .box-title { color: #5b21b6; }
+    .step-box   .box-sub  { color: #7c3aed; }
+
+    .store-box  { background: #ecfeff; border: 2px solid #0891b2; }
+    .store-box  .chip { background: #cffafe; color: #0e7490; }
+    .store-box  .box-title { color: #0e7490; }
+    .store-box  .box-sub  { color: #0891b2; }
+
+    .output-box { background: #f0fdf4; border: 2px solid #16a34a; }
+    .output-box .chip { background: #dcfce7; color: #15803d; }
+    .output-box .box-title { color: #15803d; }
+    .output-box .box-sub  { color: #16a34a; }
+
+    /* Arrow */
+    .arrow {
+      display: flex;
+      align-items: center;
+      padding: 0 10px;
+      color: #94a3b8;
+      font-size: 26px;
+      flex-shrink: 0;
+    }
+
+    /* ── Knowledge Base ── */
+    .kb {
+      background: #fffbeb;
+      border: 2px solid #d97706;
+      border-radius: 14px;
+      padding: 16px 28px;
+      flex: 1;
+    }
+
+    .kb-header {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .kb-header-title {
+      font-size: 19px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1.8px;
+      color: #b45309;
+    }
+
+    .kb-header-count {
+      font-size: 17px;
+      color: #78716c;
+    }
+
+    .kb-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 11px 32px;
+    }
+
+    .kb-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .kb-icon {
+      font-size: 22px;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .kb-name {
+      font-size: 20px;
+      font-weight: 600;
+      color: #1e293b;
+      line-height: 1.3;
+    }
+
+    .kb-source {
+      font-size: 15px;
+      color: #78716c;
+      margin-top: 3px;
+    }
+
+    /* ── Footer ── */
+    .footer {
+      text-align: center;
+      font-size: 14px;
+      color: #94a3b8;
+      flex-shrink: 0;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Service 3 — <span>RAG Stack</span></h1>
+
+  <!-- Flow -->
+  <div class="flow">
+
+    <div class="box input-box">
+      <div class="chip">Input</div>
+      <div class="box-title">Error Description</div>
+      <div class="box-sub">Structured JSON<br>from Service 2</div>
+    </div>
+
+    <div class="arrow">→</div>
+
+    <!-- LangChain LCEL orchestration bracket -->
+    <div class="lc-wrapper">
+
+      <div class="box step-box">
+        <div class="chip">Step 1</div>
+        <div class="box-title">Embed Query</div>
+        <div class="box-sub">text-embedding-3-small<br>OpenAI</div>
+      </div>
+
+      <div class="arrow">→</div>
+
+      <div class="box store-box">
+        <div class="chip">Step 2</div>
+        <div class="box-title">Retrieve</div>
+        <div class="box-sub">Top-5 passages<br>ChromaDB · cosine similarity</div>
+      </div>
+
+      <div class="arrow">→</div>
+
+      <div class="box step-box">
+        <div class="chip">Step 3</div>
+        <div class="box-title">Generate</div>
+        <div class="box-sub">GPT-4o-mini<br>temperature = 0</div>
+      </div>
+
+      <div class="lc-label">⛓ LangChain LCEL — RAG chain orchestration</div>
+    </div>
+
+    <div class="arrow">→</div>
+
+    <div class="box output-box">
+      <div class="chip">Output</div>
+      <div class="box-title">Explanation</div>
+      <div class="box-sub">Plain-English + Regulatory<br>citations back to source</div>
+    </div>
+
+  </div>
+
+  <!-- Knowledge Base -->
+  <div class="kb">
+    <div class="kb-header">
+      <div class="kb-header-title">Knowledge Base</div>
+      <div class="kb-header-count">— 309 chunks · 6 CMS regulatory documents</div>
+    </div>
+    <div class="kb-grid">
+
+      <div class="kb-item">
+        <div class="kb-icon">📄</div>
+        <div>
+          <div class="kb-name">ICD-10-CM Coding Guidelines</div>
+          <div class="kb-source">October 2025 · cms.gov — duplicate &amp; coding error explanations</div>
+        </div>
+      </div>
+
+      <div class="kb-item">
+        <div class="kb-icon">📄</div>
+        <div>
+          <div class="kb-name">CMS Physician Fee Schedule RVU26B</div>
+          <div class="kb-source">cms.gov — rate methodology &amp; outlier explanations</div>
+        </div>
+      </div>
+
+      <div class="kb-item">
+        <div class="kb-icon">📄</div>
+        <div>
+          <div class="kb-name">No Surprises Act — At a Glance</div>
+          <div class="kb-source">cms.gov — NSA overview &amp; consumer protections</div>
+        </div>
+      </div>
+
+      <div class="kb-item">
+        <div class="kb-icon">📄</div>
+        <div>
+          <div class="kb-name">No Surprises Act — Helping Consumers</div>
+          <div class="kb-source">cms.gov — patient-facing plain-English NSA guidance</div>
+        </div>
+      </div>
+
+      <div class="kb-item">
+        <div class="kb-icon">📄</div>
+        <div>
+          <div class="kb-name">No Surprises Act — Key Protections</div>
+          <div class="kb-source">cms.gov — key consumer protection provisions</div>
+        </div>
+      </div>
+
+      <div class="kb-item">
+        <div class="kb-icon">📄</div>
+        <div>
+          <div class="kb-name">Surprise Billing — Final Rules Fact Sheet</div>
+          <div class="kb-source">cms.gov — QPA disclosure &amp; IDR payment determination</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="footer">All source documents committed to repository · services/service3-rag/data/raw/ · ChromaDB rebuilt with ingest.py</div>
+
+</body>
+</html>

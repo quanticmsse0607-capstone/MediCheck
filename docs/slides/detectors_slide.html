@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=1280">
+  <title>MediCheck — Detection Modules</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #f8fafc;
+      color: #1e293b;
+      font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+      width: 1280px;
+      height: 720px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      padding: 32px 48px 24px;
+      gap: 20px;
+    }
+
+    /* ── Title ── */
+    h1 {
+      font-size: 44px;
+      font-weight: 700;
+      text-align: center;
+      color: #0f172a;
+      letter-spacing: 0.3px;
+      flex-shrink: 0;
+    }
+    h1 span { color: #2563eb; }
+
+    /* ── 2×2 Grid ── */
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr 1fr;
+      gap: 16px;
+      flex: 1;
+    }
+
+    .card {
+      border-radius: 14px;
+      padding: 22px 26px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .card-icon {
+      font-size: 34px;
+      flex-shrink: 0;
+    }
+
+    .card-title {
+      font-size: 30px;
+      font-weight: 700;
+      line-height: 1.1;
+    }
+
+    .severity {
+      display: inline-block;
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1.6px;
+      border-radius: 99px;
+      padding: 3px 12px;
+      align-self: flex-start;
+    }
+
+    .card-body {
+      font-size: 19px;
+      line-height: 1.55;
+    }
+
+    .card-how {
+      font-size: 16px;
+      font-style: italic;
+      margin-top: 2px;
+    }
+
+    /* Card colour variants */
+    .duplicate {
+      background: #fff1f2;
+      border: 2px solid #f43f5e;
+    }
+    .duplicate .card-title  { color: #be123c; }
+    .duplicate .severity    { background: #fecdd3; color: #9f1239; }
+    .duplicate .card-how    { color: #f43f5e; }
+
+    .outlier {
+      background: #fffbeb;
+      border: 2px solid #f59e0b;
+    }
+    .outlier .card-title { color: #b45309; }
+    .outlier .severity   { background: #fde68a; color: #92400e; }
+    .outlier .card-how   { color: #d97706; }
+
+    .eob {
+      background: #eff6ff;
+      border: 2px solid #3b82f6;
+    }
+    .eob .card-title { color: #1d4ed8; }
+    .eob .severity   { background: #dbeafe; color: #1e40af; }
+    .eob .card-how   { color: #3b82f6; }
+
+    .nsa {
+      background: #f5f3ff;
+      border: 2px solid #7c3aed;
+    }
+    .nsa .card-title { color: #5b21b6; }
+    .nsa .severity   { background: #ede9fe; color: #4c1d95; }
+    .nsa .card-how   { color: #7c3aed; }
+
+    /* ── Out-of-network callout ── */
+    .oon-note {
+      background: #f1f5f9;
+      border: 1.5px solid #cbd5e1;
+      border-left: 4px solid #7c3aed;
+      border-radius: 10px;
+      padding: 12px 20px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+    }
+
+    .oon-label {
+      font-size: 16px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1.4px;
+      color: #5b21b6;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .oon-text {
+      font-size: 19px;
+      color: #475569;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>How MediCheck <span>checks your bill</span></h1>
+
+  <div class="grid">
+
+    <!-- Duplicate charges -->
+    <div class="card duplicate">
+      <div class="card-header">
+        <div class="card-icon">🔁</div>
+        <div class="card-title">Duplicate Charges</div>
+        <div class="severity">High severity</div>
+      </div>
+      <div class="card-body">
+        The same procedure billed more than once on the same date of service.
+        You should only ever pay for a service once.
+      </div>
+      <div class="card-how">How: compares CPT codes and service dates across all line items</div>
+    </div>
+
+    <!-- Rate outlier -->
+    <div class="card outlier">
+      <div class="card-header">
+        <div class="card-icon">📈</div>
+        <div class="card-title">Medicare Rate Outlier</div>
+        <div class="severity">Medium severity</div>
+      </div>
+      <div class="card-body">
+        A billed amount unusually high compared to the official Medicare rate for that procedure.
+        An <em>outlier</em> means the charge falls well outside the normal range — a signal it may be inflated.
+      </div>
+      <div class="card-how">How: compares each line item against locality-adjusted CMS Physician Fee Schedule rates</div>
+    </div>
+
+    <!-- EOB mismatch -->
+    <div class="card eob">
+      <div class="card-header">
+        <div class="card-icon">📋</div>
+        <div class="card-title">EOB Mismatch</div>
+        <div class="severity">Medium severity</div>
+      </div>
+      <div class="card-body">
+        A discrepancy between what the provider billed you and what your insurer recorded
+        on your Explanation of Benefits. When these don't match, someone made an error.
+      </div>
+      <div class="card-how">How: matches billed line items against EOB amounts by CPT code and date</div>
+    </div>
+
+    <!-- NSA violation -->
+    <div class="card nsa">
+      <div class="card-header">
+        <div class="card-icon">⚖️</div>
+        <div class="card-title">No Surprises Act Violation</div>
+        <div class="severity">High severity</div>
+      </div>
+      <div class="card-body">
+        An out-of-network charge at a facility where you expected in-network rates.
+        Federal law protects you from these unexpected bills in most emergency situations.
+      </div>
+      <div class="card-how">How: flags out-of-network line items from EOB at in-network facility visits</div>
+    </div>
+
+  </div>
+
+  <!-- Out-of-network definition -->
+  <div class="oon-note">
+    <div class="oon-label">Out-of-network</div>
+    <div class="oon-text">
+      <strong>In-network</strong> means your insurer has a pre-negotiated rate with the provider — you pay a predictable, contracted amount.
+      <strong>Out-of-network</strong> means no contract exists, so the provider can charge their full rate, which is often significantly higher.
+    </div>
+  </div>
+
+</body>
+</html>
