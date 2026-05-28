@@ -73,13 +73,17 @@ def upload():
 
     # ── 4. Run OCR on bill ────────────────────────────────────────────────────
     bill_bytes = bill_file.read()
-    bill_data = ocr_service.extract(bill_bytes, source="bill")
+    bill_data = ocr_service.extract(
+        bill_bytes, source="bill", filename=bill_file.filename or ""
+    )
 
     # ── 5. Run OCR on EOB if present ──────────────────────────────────────────
     eob_data = None
     if eob_file:
         eob_bytes = eob_file.read()
-        eob_data = ocr_service.extract(eob_bytes, source="eob")
+        eob_data = ocr_service.extract(
+            eob_bytes, source="eob", filename=eob_file.filename or ""
+        )
 
     # ── 6. Persist session ────────────────────────────────────────────────────
     session = Session(status=SessionStatus.EXTRACTED)
@@ -174,6 +178,9 @@ def _build_line_item(extracted_field_id: int, item: dict, source: str) -> LineIt
         extracted_date=item.get("date"),
         confidence=item.get("confidence"),
         source=source,
+        network_status=item.get(
+            "network_status"
+        ),  # persists OON status for NSA detector
     )
 
 
@@ -186,6 +193,7 @@ def _format_line_item(item: dict, source: str) -> dict:
         "amount": item.get("amount", 0.0),
         "confidence": item.get("confidence"),
         "source": source,
+        "network_status": item.get("network_status"),
     }
 
 
