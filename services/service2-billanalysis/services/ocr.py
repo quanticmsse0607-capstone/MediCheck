@@ -31,7 +31,9 @@ class OCRService:
             )
         return self._client
 
-    def extract(self, file_bytes: bytes, source: str = "bill") -> dict:
+    def extract(
+        self, file_bytes: bytes, source: str = "bill", filename: str = ""
+    ) -> dict:
         """
         Extract structured data from a PDF using AWS Textract.
         Automatically converts PDF to image first (required for ReportLab
@@ -419,7 +421,9 @@ class OCRService:
                     if cell.upper() in ("OON", "OUT-OF-NETWORK", "NON-PARTICIPATING"):
                         network_status = "out-of-network"
                         break
-
+                row_text = " ".join(cells).upper()
+                if "OON" in row_text or "OUT-OF-NETWORK" in row_text:
+                    network_status = "out-of-network"
                 key = (cpt_code, date or "nodate")
                 if key in seen:
                     continue

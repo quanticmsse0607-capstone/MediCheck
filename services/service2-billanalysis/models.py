@@ -128,6 +128,7 @@ class LineItem(db.Model):
     One row per line item in the extracted bill or EOB.
     Stores both original extracted values and user-corrected values.
     Confidence is stored at extraction time and NOT forwarded to /confirm (agreed decision).
+    network_status is populated for EOB items only — 'out-of-network' triggers NSA detector.
     """
 
     __tablename__ = "line_items"
@@ -144,6 +145,10 @@ class LineItem(db.Model):
     )  # always empty — AMA copyright (agreed decision)
     quantity = db.Column(db.Integer, default=1)
     source = db.Column(db.String(8), nullable=False, default="bill")  # 'bill' or 'eob'
+
+    # EOB network status — None for bill items, 'out-of-network' or 'in-network' for EOB items
+    # Used by NoSurprisesActDetector to identify balance billing violations
+    network_status = db.Column(db.String(32), nullable=True)
 
     # Extracted values (immutable after OCR)
     extracted_amount = db.Column(db.Numeric(10, 2))
@@ -171,6 +176,7 @@ class LineItem(db.Model):
             "quantity": self.quantity,
             "amount": self.amount,
             "source": self.source,
+            "network_status": self.network_status,
         }
         if include_confidence:
             d["confidence"] = float(self.confidence) if self.confidence else None
