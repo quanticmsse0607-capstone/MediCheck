@@ -24,7 +24,7 @@ MediCheck's current capstone deployment runs at **$0/month** using free tiers ac
 | Service 2 — Flask Bill Analysis | Render | Web Service (Free) | $0/mo | Sleeps after 15 min inactivity |
 | Service 3 — Flask RAG | Render | Web Service (Free) | $0/mo | Sleeps after 15 min inactivity |
 | PostgreSQL | Supabase | Free tier | $0/mo | 500MB storage, no expiry |
-| ChromaDB | Render Volume | Free (ephemeral) | $0/mo | Resets on redeploy |
+| ChromaDB | Git repository | Free (committed) | $0/mo | Persists across deploys — no Render volume needed |
 | AWS Textract | AWS | Free tier (12 months) | $0/mo | 1,000 pages/month |
 | OpenAI GPT-4o-mini | OpenAI | Pay-per-use | ~$0.04/mo | Based on ~100 calls |
 | GitHub Actions CI/CD | GitHub | Free tier | $0/mo | 2,000 min/month |
