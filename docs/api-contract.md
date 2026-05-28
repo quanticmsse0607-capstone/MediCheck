@@ -213,7 +213,7 @@ The frontend triggers error detection after field confirmation. Service 2 runs a
 
 ### Response — HTTP 200 (partial — RAG timeout)
 
-When Service 3 does not respond within the configured timeout (`SERVICE3_TIMEOUT_SECONDS`, default 30 seconds), Service 2 returns detection results with `explanation` set to `null`, `citations` as an empty array, and `rag_available` set to `false`. The frontend should display a retry option for explanations.
+When Service 3 does not respond within the configured timeout (`SERVICE3_TIMEOUT_SECONDS`, default 30 seconds), Service 2 returns detection results with `explanation` set to `null`, `citations` as an empty array, and `rag_available` set to `false`. The frontend displays an informational banner and automatically re-runs analysis on the next page load (Service 2 allows re-analysis from `analysed` status when explanations are null).
 
 ```json
 {

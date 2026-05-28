@@ -84,7 +84,7 @@ medicheck/
 │           │   ├── medicare_rates.csv          # National unadjusted Medicare rates
 │           │   ├── medicare_rates_sc.csv       # South Carolina locality-adjusted rates
 │           │   └── medicare_rates_nc.csv       # North Carolina locality-adjusted rates
-│           └── chroma_db/             # ChromaDB vector store (gitignored — rebuild with ingest.py)
+│           └── chroma_db/             # ChromaDB vector store (committed — 309 chunks, 6 CMS PDFs)
 ├── test-data/
 │   ├── generate_test_data.py           # Synthetic document generator
 │   └── synthetic/                      # Generated PDFs (gitignored)
@@ -103,7 +103,6 @@ The following are excluded from version control and must be sourced locally or r
 
 | Path | Reason | How to regenerate |
 |---|---|---|
-| `services/service3-rag/data/chroma_db/` | Vector store — rebuilt on each ingest | Run `python ingest.py` in `services/service3-rag/` |
 | `test-data/synthetic/*.pdf` | Synthetic test PDFs | Run `python test-data/generate_test_data.py` |
 | `venv/` | Python virtual environments | Run `pip install -r requirements-dev.txt` in each service directory |
 | `node_modules/` | Node dependencies | Run `npm install` in `services/service1-frontend/` |
@@ -259,7 +258,7 @@ python data/cms_gpci_parser.py \
 
 ### 7. RAG Knowledge Base (Service 3)
 
-The ChromaDB vector store is gitignored and must be built locally before Service 3 can serve explanation requests. The knowledge base is built from the source documents listed below — all committed to the repo at `services/service3-rag/data/raw/`.
+The ChromaDB vector store is committed to the repo at `services/service3-rag/data/chroma_db/` (309 chunks, 6 CMS PDFs). Service 3 reads it at startup — no build step is needed for local development or deployment. If you add or replace source PDFs, regenerate the vector store and commit the updated `data/chroma_db/` directory. The knowledge base is built from the source documents listed below — all committed to the repo at `services/service3-rag/data/raw/`.
 
 **RAG source documents — all committed to the repo**
 
@@ -274,7 +273,7 @@ The ChromaDB vector store is gitignored and must be built locally before Service
 
 > **Documents intentionally excluded:** `Requirements_Related_to_Surprise_Billing_Part1.pdf` and `Part2.pdf` are excluded — they are image-based scanned PDFs with no extractable text. The IDR process proposed rule fact sheet and the Prescription Drug interim final rule are also excluded as outside MediCheck's scope.
 
-**Step 1 — Build the vector store**
+**To regenerate the vector store** (only needed when source PDFs change)
 
 ```bash
 cd services/service3-rag
@@ -283,7 +282,7 @@ source venv/bin/activate  # or venv\Scripts\activate on Windows
 python ingest.py
 ```
 
-This chunks all source documents, generates embeddings via OpenAI (`text-embedding-3-small`), and writes the ChromaDB vector store to `data/chroma_db/`. Requires `OPENAI_API_KEY` to be set in `.env`. Allow 2–5 minutes on first run.
+This chunks all source documents, generates embeddings via OpenAI (`text-embedding-3-small`), and overwrites the ChromaDB vector store at `data/chroma_db/`. Requires `OPENAI_API_KEY` to be set in `.env`. Allow 2–5 minutes on first run. After regenerating, commit the updated `data/chroma_db/` directory so the deployed app picks up the new knowledge base.
 
 ---
 

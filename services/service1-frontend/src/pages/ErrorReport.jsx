@@ -30,7 +30,13 @@ export default function ErrorReport() {
   useEffect(() => {
     getReport(sessionId)
       .then((data) => {
-        if (data.status === 'analysed' || data.status === 'letter_generated') {
+        // Use cached data only when we have a complete result.
+        // If rag_available is false, explanations were null from a previous
+        // cold-start timeout — re-run analysis so fresh explanations are fetched.
+        if (
+          data.status === 'letter_generated' ||
+          (data.status === 'analysed' && data.rag_available !== false)
+        ) {
           setResults(data)
         } else {
           return analyseSession(sessionId).then(setResults)

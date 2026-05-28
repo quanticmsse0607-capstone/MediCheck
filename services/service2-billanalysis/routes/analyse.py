@@ -57,7 +57,10 @@ def analyse():
         )
 
     # ── 2. Validate session state (NFR-17) ────────────────────────────────────
-    if not SessionStatus.can_transition_to(session.status, SessionStatus.ANALYSED):
+    # Also allow re-analysis from 'analysed' — covers the case where Service 3
+    # previously timed out and stored null explanations. Re-analysis clears and
+    # rewrites AnalysisResult rows so fresh RAG explanations are persisted.
+    if session.status not in (SessionStatus.CONFIRMED, SessionStatus.ANALYSED):
         return _error(
             400,
             ERR_NOT_CONFIRMED,

@@ -217,7 +217,11 @@ build/
 .env.*.local
 
 # ── MediCheck — Vector store ──────────────────────────────────────────────────
-chroma_db/
+# services/service3-rag/data/chroma_db is committed so Render has the knowledge base
+# at deploy time (no ingest.py startup step needed on free tier).
+# Re-run ingest.py from services/service3-rag/ to regenerate, then commit the result.
+chroma_db_test/
+services/service3-rag/chroma_db/
 
 # ── MediCheck — Synthetic test documents ─────────────────────────────────────
 # PDFs are reproducible from test-data/generate_test_data.py
