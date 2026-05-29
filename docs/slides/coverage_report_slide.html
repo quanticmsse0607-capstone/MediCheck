@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=1280">
+  <title>MediCheck — Test Coverage</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #f8fafc;
+      color: #1e293b;
+      font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+      width: 1280px;
+      height: 720px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      padding: 28px 48px 20px;
+      gap: 14px;
+    }
+
+    h1 {
+      font-size: 40px;
+      font-weight: 700;
+      text-align: center;
+      color: #0f172a;
+      letter-spacing: 0.3px;
+      flex-shrink: 0;
+    }
+    h1 span { color: #2563eb; }
+
+    /* ── Top metric cards ── */
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      flex-shrink: 0;
+    }
+
+    .metric {
+      background: white;
+      border-radius: 12px;
+      border: 1.5px solid #e2e8f0;
+      padding: 12px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .metric-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1.6px;
+      color: #94a3b8;
+    }
+
+    .metric-value {
+      font-size: 30px;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .metric-sub { font-size: 12px; color: #64748b; margin-top: 1px; }
+
+    .metric-pass { border-color: #22c55e; }
+    .metric-pass .metric-value { color: #15803d; }
+    .metric-blue { border-color: #3b82f6; }
+    .metric-blue .metric-value { color: #1d4ed8; }
+    .metric-purple { border-color: #7c3aed; }
+    .metric-purple .metric-value { color: #5b21b6; }
+    .metric-orange { border-color: #ea580c; }
+    .metric-orange .metric-value { color: #9a3412; }
+
+    /* ── Three service columns ── */
+    .services {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 14px;
+      flex: 1;
+    }
+
+    .panel {
+      background: white;
+      border-radius: 14px;
+      padding: 16px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .panel-svc1 { border: 2px solid #3b82f6; }
+    .panel-svc2 { border: 2px solid #7c3aed; }
+    .panel-svc3 { border: 2px solid #ea580c; }
+
+    .panel-header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-bottom: 2px;
+    }
+
+    .panel-title {
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .panel-svc1 .panel-title { color: #1d4ed8; }
+    .panel-svc2 .panel-title { color: #5b21b6; }
+    .panel-svc3 .panel-title { color: #9a3412; }
+
+    .panel-tests {
+      font-size: 24px;
+      font-weight: 700;
+    }
+
+    .panel-svc1 .panel-tests { color: #1d4ed8; }
+    .panel-svc2 .panel-tests { color: #5b21b6; }
+    .panel-svc3 .panel-tests { color: #9a3412; }
+
+    .panel-subtitle {
+      font-size: 12px;
+      color: #64748b;
+      font-style: italic;
+      margin-bottom: 2px;
+    }
+
+    .divider {
+      height: 1px;
+      background: #f1f5f9;
+      margin: 2px 0;
+    }
+
+    /* coverage bar */
+    .cov-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 2px 0;
+    }
+
+    .cov-label {
+      font-size: 12px;
+      color: #64748b;
+      width: 90px;
+      flex-shrink: 0;
+    }
+
+    .bar-track {
+      flex: 1;
+      height: 8px;
+      background: #f1f5f9;
+      border-radius: 99px;
+      overflow: hidden;
+    }
+
+    .bar-fill { height: 100%; border-radius: 99px; }
+    .bar-green { background: #22c55e; }
+    .bar-blue  { background: #2563eb; }
+    .bar-na    { background: #cbd5e1; }
+
+    .cov-pct {
+      font-size: 13px;
+      font-weight: 700;
+      width: 36px;
+      text-align: right;
+    }
+
+    .cov-pct.green { color: #15803d; }
+    .cov-pct.blue  { color: #1d4ed8; }
+    .cov-pct.gray  { color: #94a3b8; }
+
+    /* test rows */
+    .test-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12.5px;
+      padding: 3px 0;
+      border-bottom: 1px solid #f8fafc;
+    }
+
+    .test-row:last-child { border-bottom: none; }
+    .test-file { font-family: 'Courier New', monospace; color: #334155; font-size: 12px; }
+    .test-type { color: #94a3b8; font-size: 11px; }
+    .test-n { font-weight: 700; color: #1d4ed8; font-size: 13px; }
+
+    .badge {
+      font-size: 11px;
+      font-weight: 700;
+      border-radius: 99px;
+      padding: 2px 9px;
+    }
+
+    .badge-green  { background: #dcfce7; color: #15803d; }
+    .badge-blue   { background: #dbeafe; color: #1e40af; }
+    .badge-orange { background: #ffedd5; color: #7c2d12; }
+    .badge-gray   { background: #f1f5f9; color: #475569; }
+
+    .note {
+      font-size: 11.5px;
+      color: #78350f;
+      background: #fffbeb;
+      border: 1px solid #fcd34d;
+      border-radius: 6px;
+      padding: 6px 10px;
+      line-height: 1.5;
+      margin-top: 2px;
+    }
+
+    .green-note {
+      font-size: 11.5px;
+      color: #166534;
+      background: #f0fdf4;
+      border: 1px solid #22c55e;
+      border-radius: 6px;
+      padding: 6px 10px;
+      line-height: 1.6;
+      margin-top: 2px;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Test Suite — <span>All Three Services</span></h1>
+
+  <!-- Metric cards -->
+  <div class="metrics">
+    <div class="metric metric-blue">
+      <div class="metric-label">Total Tests</div>
+      <div class="metric-value">137</div>
+      <div class="metric-sub">across all three services</div>
+    </div>
+    <div class="metric metric-pass">
+      <div class="metric-label">Service 2 Coverage</div>
+      <div class="metric-value">94%</div>
+      <div class="metric-sub">NFR-27 requires 80%</div>
+    </div>
+    <div class="metric metric-purple">
+      <div class="metric-label">RAG Evaluation</div>
+      <div class="metric-value">16 cases</div>
+      <div class="metric-sub">94% groundedness · 81% citations</div>
+    </div>
+    <div class="metric metric-pass">
+      <div class="metric-label">No Live Calls</div>
+      <div class="metric-value">Unit / Svc</div>
+      <div class="metric-sub">real calls in integration only</div>
+    </div>
+  </div>
+
+  <!-- Service columns -->
+  <div class="services">
+
+    <!-- Service 1 -->
+    <div class="panel panel-svc1">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Service 1 — React Frontend</div>
+          <div class="panel-subtitle">Vitest 4.x · API client unit tests</div>
+        </div>
+        <div class="panel-tests">10</div>
+      </div>
+      <div class="divider"></div>
+
+      <div class="test-row">
+        <div>
+          <div class="test-file">medicheck.test.js</div>
+          <div class="test-type">Unit — API client</div>
+        </div>
+        <div class="test-n">10</div>
+      </div>
+
+      <div style="margin-top:4px; display:flex; flex-wrap:wrap; gap:6px;">
+        <span class="badge badge-blue">ApiError constructor</span>
+        <span class="badge badge-blue">Non-JSON gateway errors</span>
+        <span class="badge badge-blue">uploadDocuments</span>
+        <span class="badge badge-blue">confirmFields</span>
+        <span class="badge badge-blue">getReport</span>
+      </div>
+
+      <div class="green-note" style="margin-top:auto;">
+        All tests mock fetch() globally — no live HTTP traffic.<br>
+        H4 regression guard included (Render 502 HTML parse).
+      </div>
+    </div>
+
+    <!-- Service 2 -->
+    <div class="panel panel-svc2">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Service 2 — Bill Analysis API</div>
+          <div class="panel-subtitle">pytest 8.x · 7 test files</div>
+        </div>
+        <div class="panel-tests">74</div>
+      </div>
+      <div class="divider"></div>
+
+      <div class="cov-row">
+        <div class="cov-label">Overall</div>
+        <div class="bar-track"><div class="bar-fill bar-green" style="width:94%"></div></div>
+        <div class="cov-pct green">94%</div>
+      </div>
+      <div class="cov-row">
+        <div class="cov-label">Detectors</div>
+        <div class="bar-track"><div class="bar-fill bar-blue" style="width:100%"></div></div>
+        <div class="cov-pct blue">93–100%</div>
+      </div>
+      <div class="cov-row">
+        <div class="cov-label">Engine</div>
+        <div class="bar-track"><div class="bar-fill bar-blue" style="width:100%"></div></div>
+        <div class="cov-pct blue">100%</div>
+      </div>
+
+      <div class="test-row">
+        <div><div class="test-file">test_detectors.py</div><div class="test-type">Unit · pos/neg/boundary</div></div>
+        <div class="test-n">15</div>
+      </div>
+      <div class="test-row">
+        <div><div class="test-file">test_pipeline.py</div><div class="test-type">E2E upload→letter</div></div>
+        <div class="test-n">20</div>
+      </div>
+      <div class="test-row">
+        <div><div class="test-file">test_report + upload + analyse</div><div class="test-type">Route integration</div></div>
+        <div class="test-n">24</div>
+      </div>
+      <div class="test-row">
+        <div><div class="test-file">test_engine + rag_client</div><div class="test-type">Unit</div></div>
+        <div class="test-n">15</div>
+      </div>
+
+      <div class="note">
+        ocr.py (10%) — requires live AWS · rag_client.py (29%) — Service 3 mocked per NFR-26
+      </div>
+    </div>
+
+    <!-- Service 3 + Integration -->
+    <div class="panel panel-svc3">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Service 3 — RAG & Letter</div>
+          <div class="panel-subtitle">pytest 8.x · all OpenAI + ChromaDB mocked</div>
+        </div>
+        <div class="panel-tests">43</div>
+      </div>
+      <div class="divider"></div>
+
+      <div class="test-row">
+        <div><div class="test-file">test_chain.py</div><div class="test-type">RAG chain · sanitisation · filtering</div></div>
+        <div class="test-n">22</div>
+      </div>
+      <div class="test-row">
+        <div><div class="test-file">test_explain.py</div><div class="test-type">POST /explain · validation</div></div>
+        <div class="test-n">17</div>
+      </div>
+      <div class="test-row">
+        <div><div class="test-file">test_health + draft_letter</div><div class="test-type">Endpoint smoke</div></div>
+        <div class="test-n">4</div>
+      </div>
+
+      <div class="divider" style="margin-top:6px;"></div>
+
+      <div class="panel-header" style="margin-top:4px;">
+        <div>
+          <div class="panel-title" style="color:#15803d; font-size:14px;">Integration — Service 2 × Service 3</div>
+          <div class="panel-subtitle">Live HTTP · real OpenAI · push to main only</div>
+        </div>
+        <div class="panel-tests" style="color:#15803d; font-size:20px;">10</div>
+      </div>
+
+      <div style="display:flex; flex-wrap:wrap; gap:5px; margin-top:2px;">
+        <span class="badge badge-green">Health checks</span>
+        <span class="badge badge-green">Upload → session_id</span>
+        <span class="badge badge-green">rag_available: true</span>
+        <span class="badge badge-green">Explanations + citations</span>
+        <span class="badge badge-green">Error count match</span>
+      </div>
+
+      <div class="green-note" style="margin-top:auto;">
+        Critical assertion: <strong>rag_available: true</strong> proves the full<br>
+        Service 2 → Service 3 → OpenAI → ChromaDB chain works end-to-end.
+      </div>
+    </div>
+
+  </div>
+
+</body>
+</html>
